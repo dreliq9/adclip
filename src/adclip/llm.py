@@ -28,7 +28,13 @@ class AnthropicProvider:
         import anthropic
 
         if not os.environ.get("ANTHROPIC_API_KEY"):
-            raise RuntimeError("ANTHROPIC_API_KEY not set")
+            raise RuntimeError(
+                "AnthropicProvider requires ANTHROPIC_API_KEY, which this "
+                "project normally does not use. Keyless alternatives: "
+                "(1) use MCP sampling via Claude Code (see .mcp.json), or "
+                "(2) use ClaudeCliProvider (default on the CLI). "
+                "See CLAUDE.md in the repo root for details."
+            )
         self._client = anthropic.Anthropic()
         self._model = model
 
@@ -115,5 +121,8 @@ def parse_copy_candidates(raw: str) -> list[dict]:
 
 
 def default_provider() -> LLMProvider:
-    """Return the default non-MCP provider (CLI / standalone use)."""
-    return AnthropicProvider()
+    """Return the default non-MCP provider. Keyless by construction —
+    uses the user's Claude Code subscription auth via subprocess.
+    """
+    from adclip.claude_cli import ClaudeCliProvider
+    return ClaudeCliProvider()
