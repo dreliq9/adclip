@@ -21,9 +21,10 @@ BRIEF = dict(
 def test_generate_copy_with_fake_provider():
     result = asyncio.run(_generate_copy_impl(json.dumps(BRIEF), provider_name="fake"))
     assert result["ok"] is True
-    assert len(result["winners"]) == 4
+    # variants=2 is the TOTAL output count (global rank, not per-bucket)
+    assert len(result["winners"]) == 2
     assert "pool" in result
-    assert len(result["pool"]) == 6
+    assert len(result["pool"]) == 6  # 1 format × 2 angles × pool_size=3
 
 
 def test_generate_copy_filters_policy_violations():

@@ -80,7 +80,7 @@ async def _generate_copy_impl(
 
     pool = await generate_copy_pool(brief, provider=provider)
     survivors, rejected = _filter_pool(pool, brief)
-    winners = rank_pool(survivors, n=brief.variants, per_bucket=True)
+    winners = rank_pool(survivors, n=brief.variants)
     return {
         "ok": True,
         "winners": winners,

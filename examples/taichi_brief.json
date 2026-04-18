@@ -12,5 +12,7 @@
   "policy_profile": "crypto",
   "must_include": [],
   "must_avoid": ["guaranteed returns", "get rich"],
+  "use_judge": true,
+  "heal_violations": 2,
   "output_dir": "/tmp/adclip_taichi_smoke"
 }

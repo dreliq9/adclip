@@ -89,14 +89,16 @@ async def run_pipeline(
         pool, brief, llm_provider=llm_provider,
     )
 
+    # `variants` is total output count (not per bucket). Users who want
+    # per-angle or per-format coverage should size `variants` accordingly.
     if brief.use_judge:
         from adclip.scoring import rank_with_judge
         winners = await rank_with_judge(
             survivors, brief=brief, provider=llm_provider,
-            n=brief.variants, per_bucket=True,
+            n=brief.variants,
         )
     else:
-        winners = rank_pool(survivors, n=brief.variants, per_bucket=True)
+        winners = rank_pool(survivors, n=brief.variants)
 
     # Dump rejected
     if rejected:
@@ -120,7 +122,7 @@ async def run_pipeline(
                 "variant_id": vid,
                 "format": w["format"],
                 "path": f"variants/{vid}/{w['format']}.json",
-                "score": None,
+                "score": w.get("judge_score"),
             })
             continue
 
@@ -139,7 +141,7 @@ async def run_pipeline(
                 "variant_id": vid,
                 "format": w["format"],
                 "path": f"variants/{vid}/{w['format']}.png",
-                "score": None,
+                "score": w.get("judge_score"),
             })
             continue
 
