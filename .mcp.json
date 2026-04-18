@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "adclip": {
+      "command": "${HOME}/Desktop/adclip/.venv/bin/adclip-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}

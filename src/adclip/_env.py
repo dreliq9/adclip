@@ -12,11 +12,18 @@ from pathlib import Path
 
 
 def _find_dotenv(start: Path | None = None) -> Path | None:
+    # 1. Walk up from cwd (respects user-supplied override in any dir).
     here = (start or Path.cwd()).resolve()
     for p in (here, *here.parents):
         candidate = p / ".env"
         if candidate.exists():
             return candidate
+    # 2. Fallback: .env at the adclip project root, regardless of cwd.
+    #    This lets the MCP server find .env even when spawned from elsewhere.
+    #    __file__ is src/adclip/_env.py; project root is three parents up.
+    project_env = Path(__file__).resolve().parents[2] / ".env"
+    if project_env.exists():
+        return project_env
     return None
 
 
