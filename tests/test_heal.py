@@ -89,3 +89,37 @@ def test_heal_candidate_gives_up_after_max_retries():
         provider=provider, max_retries=2,
     ))
     assert healed is None
+
+
+def test_heal_candidate_uses_custom_check_fn():
+    from adclip.policy import PolicyReport
+
+    brief = _brief()
+    cand = {
+        "headline": "First attempt headline",
+        "body": "First body.", "cta": "Go",
+        "format": "meta_feed_4x5", "angle": "a",
+    }
+    violations = ["semantic: implies no-risk"]
+
+    state = {"n": 0}
+
+    async def check_fn(c):
+        state["n"] += 1
+        if state["n"] == 1:
+            return PolicyReport(violations=["semantic: still implies no-risk"])
+        return PolicyReport()
+
+    provider = _ScriptedHealProvider(replies=[
+        {"headline": "Second attempt headline",
+         "body": "Second body.", "cta": "Go"},
+        {"headline": "Third attempt headline",
+         "body": "Third body.", "cta": "Go"},
+    ])
+    healed = asyncio.run(heal_candidate(
+        cand, brief=brief, violations=violations,
+        provider=provider, max_retries=2, check_fn=check_fn,
+    ))
+    assert healed is not None
+    assert healed["headline"] == "Third attempt headline"
+    assert healed["heal_attempts"] == 2

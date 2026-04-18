@@ -1,7 +1,12 @@
 """adclip CLI — thin wrapper over the MCP tool implementations.
 
-The CLI path can't use MCP sampling (no connected client), so 'default' here
-means AnthropicProvider (needs ANTHROPIC_API_KEY) or 'fake' for tests.
+The CLI can't use MCP sampling (no connected client), so it defaults to
+'claude-cli' (subscription auth, no API key). Pass --llm anthropic to opt
+into the direct API, or --llm fake in tests.
+
+Live third-party APIs (anthropic, fal.ai) additionally require
+ADCLIP_ALLOW_LIVE_APIS=1 to be set — this prevents surprise billing if a
+key happens to be in the environment.
 """
 
 from __future__ import annotations
@@ -58,7 +63,7 @@ def estimate_cmd(brief_path: str) -> None:
     ),
 )
 def copy_cmd(brief_path: str, provider: str) -> None:
-    """Generate ad copy (no images/video). CLI uses Anthropic SDK directly."""
+    """Generate ad copy (no images/video)."""
     out = asyncio.run(_generate_copy_impl(
         Path(brief_path).read_text(), provider_name=provider
     ))

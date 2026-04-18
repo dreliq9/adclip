@@ -53,6 +53,9 @@ MODEL_COST_PER_SEC = {
 
 
 def _check_key():
+    from adclip._live_apis import require_live_apis
+
+    require_live_apis("fal.ai video generation")
     if not os.environ.get("FAL_KEY"):
         raise RuntimeError(
             "FAL_KEY environment variable not set. "

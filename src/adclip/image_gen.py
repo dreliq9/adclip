@@ -39,6 +39,9 @@ class ImageResult:
 
 
 def _check_key() -> None:
+    from adclip._live_apis import require_live_apis
+
+    require_live_apis("fal.ai image generation")
     if not os.environ.get("FAL_KEY"):
         raise RuntimeError(
             "FAL_KEY not set. Get your key at https://fal.ai/dashboard/keys"

@@ -65,3 +65,23 @@ def test_get_provider_claude_cli_branch():
 
     provider = _get_provider("claude-cli", session=None)
     assert isinstance(provider, ClaudeCliProvider)
+
+
+def test_get_provider_default_routes_to_claude_cli():
+    """'default' should resolve to ClaudeCliProvider with no session —
+    MCP sampling isn't supported by the Claude Code client, so the
+    zero-config path must still work."""
+    from adclip.mcp.copy_tools import _get_provider
+    from adclip.claude_cli import ClaudeCliProvider
+
+    provider = _get_provider("default", session=None)
+    assert isinstance(provider, ClaudeCliProvider)
+
+
+def test_get_provider_sampling_still_requires_session():
+    """Explicit 'sampling' should fail fast without a session."""
+    import pytest
+    from adclip.mcp.copy_tools import _get_provider
+
+    with pytest.raises(RuntimeError, match="sampling provider requires"):
+        _get_provider("sampling", session=None)

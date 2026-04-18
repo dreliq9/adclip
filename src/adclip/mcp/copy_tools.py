@@ -1,7 +1,9 @@
 """MCP tools: copy generation pipeline + standalone policy check.
 
-Default provider is MCP sampling — adclip asks the calling client
-(Claude Code) to run the LLM. No adclip-side API key required.
+Default provider is the claude CLI subprocess — Claude Code's MCP client
+does not implement MCP sampling today, so "default" routes to
+ClaudeCliProvider for reliability. Pass provider="sampling" explicitly if
+running under a client that supports sampling.
 """
 
 from __future__ import annotations
@@ -27,16 +29,17 @@ from adclip.scoring import rank_pool
 def _get_provider(name: str, *, session=None) -> LLMProvider:
     if name == "fake":
         return FakeLLMProvider()
-    if name == "sampling" or name == "default":
-        if session is None:
-            raise RuntimeError(
-                "sampling provider requires an MCP session. Try provider="
-                "'claude-cli' if no sampling-capable client is connected."
-            )
-        return SamplingLLMProvider(session)
-    if name == "claude-cli":
+    if name == "default" or name == "claude-cli":
         from adclip.claude_cli import ClaudeCliProvider
         return ClaudeCliProvider()
+    if name == "sampling":
+        if session is None:
+            raise RuntimeError(
+                "sampling provider requires an MCP session. Use provider="
+                "'claude-cli' (the default) if no sampling-capable client "
+                "is connected."
+            )
+        return SamplingLLMProvider(session)
     if name == "anthropic":
         from adclip.llm import AnthropicProvider
         return AnthropicProvider()
@@ -134,8 +137,11 @@ def register(mcp) -> None:
 
         Args:
             brief_json: JSON-encoded AdBrief.
-            provider: 'default'/'sampling' (asks Claude via MCP sampling),
-                'anthropic' (direct API key), or 'fake' (tests).
+            provider: 'default'/'claude-cli' (shells out to claude CLI —
+                no key, works under any MCP client), 'sampling' (asks
+                Claude via MCP sampling — only works under clients that
+                implement it), 'anthropic' (direct API key), or 'fake'
+                (tests).
         """
         session = ctx.request_context.session
         result = await _generate_copy_impl(

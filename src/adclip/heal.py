@@ -74,11 +74,17 @@ async def heal_candidate(
     violations: list[str],
     provider: LLMProvider,
     max_retries: int,
+    check_fn=None,
 ) -> dict | None:
     """Attempt to rewrite a policy-violating candidate.
 
-    Returns the healed candidate (with `healed_from` and `heal_attempts`
-    metadata attached) or None if healing failed within max_retries.
+    ``check_fn`` is an optional async callable ``(candidate) -> PolicyReport``
+    that replaces the built-in literal ``check_copy`` call — used by the
+    pipeline to inject the semantic-policy second pass. When omitted, falls
+    back to ``check_copy`` alone.
+
+    Returns the healed candidate (with ``healed_from`` and ``heal_attempts``
+    metadata attached) or None if healing failed within ``max_retries``.
     """
     fmt = get_format(candidate["format"])
     original = {
@@ -96,16 +102,22 @@ async def heal_candidate(
         if not cands:
             return None
         fix = cands[0]
+        fix_candidate = {
+            **fix, "format": candidate["format"], "angle": candidate["angle"],
+        }
 
-        report = check_copy(
-            headline=fix["headline"],
-            body=fix["body"],
-            cta=fix["cta"],
-            format_spec=fmt,
-            profile=brief.policy_profile,
-            must_include=brief.must_include,
-            must_avoid=brief.must_avoid,
-        )
+        if check_fn is not None:
+            report = await check_fn(fix_candidate)
+        else:
+            report = check_copy(
+                headline=fix["headline"],
+                body=fix["body"],
+                cta=fix["cta"],
+                format_spec=fmt,
+                profile=brief.policy_profile,
+                must_include=brief.must_include,
+                must_avoid=brief.must_avoid,
+            )
         if not report.violations:
             return {
                 **fix,
@@ -115,7 +127,7 @@ async def heal_candidate(
                 "healed_from": original,
                 "heal_attempts": attempt,
             }
-        current = {**fix, "format": candidate["format"], "angle": candidate["angle"]}
+        current = fix_candidate
         current_violations = report.violations
 
     return None

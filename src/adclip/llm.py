@@ -25,6 +25,10 @@ class LLMProvider(Protocol):
 
 class AnthropicProvider:
     def __init__(self, model: str = "claude-sonnet-4-6"):
+        from adclip._live_apis import require_live_apis
+
+        require_live_apis("AnthropicProvider")
+
         import anthropic
 
         if not os.environ.get("ANTHROPIC_API_KEY"):

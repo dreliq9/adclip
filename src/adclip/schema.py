@@ -33,8 +33,6 @@ class AdBrief(BaseModel):
     # Brand assets
     logo_path: str | None = None
     brand_colors: list[str] = []
-    product_screenshots: list[str] = []
-    font_family: str | None = None
 
     # Constraints
     must_include: list[str] = []
@@ -50,6 +48,9 @@ class AdBrief(BaseModel):
     # Max retries to rewrite a policy-violating candidate before giving up.
     # 0 disables healing entirely (v0.1 behavior).
     heal_violations: int = Field(default=0, ge=0, le=5)
+    # Second-pass LLM check for paraphrases the literal blocklist misses.
+    # Opt-in: adds one LLM call per candidate.
+    use_semantic_policy: bool = False
 
     @field_validator("formats")
     @classmethod
