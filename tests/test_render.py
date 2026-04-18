@@ -51,6 +51,52 @@ def test_render_draws_logo_image_overlay(tmp_bg, tmp_path):
     assert (r, g, b) == (255, 0, 255), f"expected magenta logo pixel, got {(r, g, b)}"
 
 
+def test_render_missing_plan_kind_raises_clean_valueerror(tmp_bg, tmp_path):
+    out = tmp_path / "out.png"
+    with pytest.raises(ValueError, match="non-static plan"):
+        render_static_ad({"overlays": []}, background=str(tmp_bg), output=str(out))
+
+
+def test_render_tolerates_overlay_without_text(tmp_bg, tmp_path):
+    out = tmp_path / "out.png"
+    plan = {
+        "kind": "static",
+        "overlays": [
+            {"type": "text", "role": "headline"},  # no 'text' key
+            {"type": "text", "role": "cta", "text": "Only real overlay"},
+        ],
+    }
+    render_static_ad(plan, background=str(tmp_bg), output=str(out))
+    assert out.exists()
+
+
+def test_render_continues_when_logo_file_missing(tmp_bg, tmp_path):
+    out = tmp_path / "out.png"
+    plan = {
+        "kind": "static",
+        "overlays": [
+            {
+                "type": "image", "role": "logo",
+                "path": str(tmp_path / "does_not_exist.png"),
+                "position": "bottom_right", "pad": 32, "max_width": 100,
+            },
+            {
+                "type": "text", "role": "headline",
+                "text": "Still draws", "position": "top", "pad": 48,
+                "font_size": 60, "color": "#ffffff", "stroke": "#000000",
+            },
+        ],
+    }
+    render_static_ad(plan, background=str(tmp_bg), output=str(out))
+    assert out.exists()
+
+
+def test_render_tolerates_missing_overlays_key(tmp_bg, tmp_path):
+    out = tmp_path / "out.png"
+    render_static_ad({"kind": "static"}, background=str(tmp_bg), output=str(out))
+    assert out.exists()
+
+
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 def test_render_static_produces_file(tmp_bg, tmp_path):
     out = tmp_path / "out.png"

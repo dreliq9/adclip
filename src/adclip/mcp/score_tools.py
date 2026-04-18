@@ -101,13 +101,22 @@ async def _score_variants_impl(
                 None,
             )
             entry = dict(original) if original else {"variant_id": vid, "format": r["format"]}
+            # Overwrite score fields with the current ranking's values (or clear
+            # them) so write-through never leaves stale scores from prior runs.
             if r["heuristic_score"] is not None:
                 entry["heuristic_score"] = r["heuristic_score"]
+            else:
+                entry.pop("heuristic_score", None)
             if r["judge_score"] is not None:
                 entry["judge_score"] = r["judge_score"]
+            else:
+                entry.pop("judge_score", None)
+            if r["judge_score"] is not None:
                 entry["score"] = r["judge_score"]
             elif r["heuristic_score"] is not None:
                 entry["score"] = r["heuristic_score"]
+            else:
+                entry.pop("score", None)
             new_entries.append(entry)
 
         # Carry over entries that exist on disk but weren't in the rank (e.g. missing copy.json)

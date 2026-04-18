@@ -142,6 +142,62 @@ def test_write_updates_manifest(tmp_path):
     assert "score" in m["entries"][0]
 
 
+def test_write_clears_stale_judge_score_on_heuristic_rerun(tmp_path):
+    # Prior judge run stamped judge_score=0.99. Current heuristic-only rerun
+    # must drop the stale judge_score and refresh 'score' from the heuristic.
+    _seed(tmp_path, variants=[
+        {"variant_id": "v01", "copy": {
+            "headline": "H", "body": "x", "cta": "C",
+            "angle": "credibility", "format": "meta_feed_4x5",
+        }},
+    ])
+    (tmp_path / "manifest.json").write_text(json.dumps({
+        "entries": [
+            {"variant_id": "v01", "format": "meta_feed_4x5",
+             "score": 0.99, "judge_score": 0.99},
+        ],
+    }))
+
+    out = asyncio.run(_score_variants_impl(str(tmp_path), write=True))
+    assert out["ok"] is True
+
+    m = json.loads((tmp_path / "manifest.json").read_text())
+    entry = m["entries"][0]
+    assert "judge_score" not in entry
+    assert entry["score"] == entry["heuristic_score"]
+    assert entry["score"] != 0.99
+
+
+def test_write_clears_stale_heuristic_on_judge_rerun(tmp_path):
+    # Prior heuristic run stamped heuristic_score. Current judge rerun must
+    # drop the stale heuristic_score and set score=judge_score.
+    _seed(tmp_path, variants=[
+        {"variant_id": "v01", "copy": {
+            "headline": "H", "body": "x", "cta": "C",
+            "angle": "credibility", "format": "meta_feed_4x5",
+        }},
+    ])
+    (tmp_path / "manifest.json").write_text(json.dumps({
+        "entries": [
+            {"variant_id": "v01", "format": "meta_feed_4x5",
+             "score": 0.42, "heuristic_score": 0.42},
+        ],
+    }))
+
+    judge = ScriptedJudge([0.77])
+    out = asyncio.run(_score_variants_impl(
+        str(tmp_path), use_judge=True, llm_provider=judge, write=True,
+    ))
+    assert out["ok"] is True
+
+    m = json.loads((tmp_path / "manifest.json").read_text())
+    entry = m["entries"][0]
+    # Judge path computes both scores; current values replace the stale 0.42
+    assert entry["judge_score"] == 0.77
+    assert entry["score"] == 0.77
+    assert entry["heuristic_score"] != 0.42
+
+
 def test_unreadable_copy_json_skipped(tmp_path):
     _seed(tmp_path, variants=[
         {"variant_id": "v01", "copy": {

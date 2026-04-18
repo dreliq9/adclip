@@ -127,6 +127,24 @@ def test_logo_from_brief_is_applied(tmp_path):
     assert (r, g, b) == (255, 0, 255)
 
 
+def test_user_background_outside_campaign_is_rejected(tmp_path):
+    _seed_campaign(tmp_path)
+    copy = {"headline": "H", "body": "B", "cta": "C", "angle": "a", "format": "meta_feed_4x5"}
+    _make_variant(tmp_path, "v01", copy=copy)
+
+    # Background lives OUTSIDE the campaign_dir — should be refused.
+    outside = tmp_path.parent / "outside_bg.png"
+    Image.new("RGB", (1080, 1350), color=(0, 0, 0)).save(outside)
+
+    out = _render_variant_impl(
+        str(tmp_path), "v01", background=str(outside),
+    )
+    outside.unlink()  # cleanup
+
+    assert out["ok"] is False
+    assert "inside campaign_dir" in out["error"]
+
+
 def test_override_format_name(tmp_path):
     _seed_campaign(tmp_path)
     copy = {"headline": "H", "body": "B", "cta": "C", "angle": "a", "format": "meta_feed_4x5"}

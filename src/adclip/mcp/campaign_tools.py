@@ -65,10 +65,16 @@ def _campaign_status_impl(campaign_dir: str) -> dict:
     if rejected_path.exists():
         try:
             rejected = json.loads(rejected_path.read_text())
+        except json.JSONDecodeError as e:
+            status["rejected_error"] = f"rejected.json unreadable: {e}"
+        else:
             if isinstance(rejected, list):
                 status["rejected_count"] = len(rejected)
-        except json.JSONDecodeError:
-            pass
+            else:
+                status["rejected_error"] = (
+                    f"rejected.json has unexpected shape "
+                    f"({type(rejected).__name__}); expected list"
+                )
 
     variants_dir = root / "variants"
     if variants_dir.exists():

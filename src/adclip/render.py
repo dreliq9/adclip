@@ -13,7 +13,9 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
 
 
 def _draw_text_overlay(draw: ImageDraw.ImageDraw, overlay: dict, img_w: int, img_h: int) -> None:
-    text = overlay["text"]
+    text = overlay.get("text") or ""
+    if not text:
+        return
     pad = overlay.get("pad", 48)
     font_size = overlay.get("font_size", 48)
     color = _hex_to_rgb(overlay.get("color", "#ffffff"))
@@ -48,7 +50,13 @@ def _draw_text_overlay(draw: ImageDraw.ImageDraw, overlay: dict, img_w: int, img
 
 
 def _paste_image_overlay(base: Image.Image, overlay: dict) -> None:
-    src = Image.open(overlay["path"]).convert("RGBA")
+    path = overlay.get("path")
+    if not path:
+        return
+    try:
+        src = Image.open(path).convert("RGBA")
+    except (FileNotFoundError, OSError):
+        return
 
     max_w = overlay.get("max_width")
     if max_w and src.width > max_w:
@@ -76,18 +84,20 @@ def _paste_image_overlay(base: Image.Image, overlay: dict) -> None:
 
 
 def render_static_ad(plan: dict, *, background: str, output: str) -> None:
-    if plan["kind"] != "static":
-        raise ValueError(f"render_static_ad called on non-static plan: {plan['kind']}")
+    kind = plan.get("kind")
+    if kind != "static":
+        raise ValueError(f"render_static_ad called on non-static plan: {kind!r}")
 
+    overlays = plan.get("overlays", [])
     img = Image.open(background).convert("RGBA")
 
-    for ov in plan["overlays"]:
-        if ov["type"] == "image":
+    for ov in overlays:
+        if ov.get("type") == "image":
             _paste_image_overlay(img, ov)
 
     draw = ImageDraw.Draw(img)
-    for ov in plan["overlays"]:
-        if ov["type"] == "text":
+    for ov in overlays:
+        if ov.get("type") == "text":
             _draw_text_overlay(draw, ov, img.width, img.height)
 
     Path(output).parent.mkdir(parents=True, exist_ok=True)

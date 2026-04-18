@@ -89,6 +89,18 @@ def _render_variant_impl(
         bg_path = Path(background)
         if not bg_path.exists():
             return {"ok": False, "error": f"Background not found: {background}"}
+        try:
+            resolved = bg_path.resolve()
+            resolved.relative_to(root.resolve())
+        except ValueError:
+            return {
+                "ok": False,
+                "error": (
+                    f"Background must live inside campaign_dir "
+                    f"({campaign_dir!r}); got {background!r}"
+                ),
+            }
+        bg_path = resolved
     else:
         found = _find_raw_background(vdir, fmt_name)
         if found is None:

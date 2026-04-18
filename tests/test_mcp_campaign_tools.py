@@ -84,3 +84,25 @@ def test_malformed_manifest_reported(tmp_path):
     assert out["ok"] is True
     assert out["manifest_found"] is False
     assert "manifest_error" in out
+
+
+def test_malformed_rejected_json_surfaces_error(tmp_path):
+    (tmp_path / "pool_rejected").mkdir()
+    (tmp_path / "pool_rejected" / "rejected.json").write_text("{broken")
+    out = _campaign_status_impl(str(tmp_path))
+    assert out["ok"] is True
+    assert out["rejected_count"] == 0
+    assert "rejected_error" in out
+    assert "unreadable" in out["rejected_error"]
+
+
+def test_rejected_json_non_list_shape_surfaces_error(tmp_path):
+    (tmp_path / "pool_rejected").mkdir()
+    (tmp_path / "pool_rejected" / "rejected.json").write_text(
+        json.dumps({"items": [1, 2, 3]})
+    )
+    out = _campaign_status_impl(str(tmp_path))
+    assert out["ok"] is True
+    assert out["rejected_count"] == 0
+    assert "rejected_error" in out
+    assert "unexpected shape" in out["rejected_error"]
