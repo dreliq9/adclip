@@ -5,9 +5,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from mcp.server.fastmcp import Context
 from pydantic import ValidationError
 
-from adclip.llm import FakeLLMProvider, default_provider
+from adclip.llm import (
+    FakeLLMProvider,
+    LLMProvider,
+    SamplingLLMProvider,
+    default_provider,
+)
 from adclip.pipeline import run_pipeline
 from adclip.schema import AdBrief
 
@@ -31,27 +37,47 @@ def _fake_image_fn(prompt, *, format_name, output_dir, seed):
     return R()
 
 
-def _generate_variants_impl(
+def _resolve_llm(name: str, session) -> LLMProvider:
+    if name == "fake":
+        return FakeLLMProvider()
+    if name == "sampling" or name == "default":
+        if session is None:
+            raise RuntimeError(
+                "sampling provider requires an MCP session (no ctx available)"
+            )
+        return SamplingLLMProvider(session)
+    if name == "anthropic":
+        return default_provider()
+    raise ValueError(f"Unknown llm_provider: {name}")
+
+
+async def _generate_variants_impl(
     brief_json: str,
     *,
     llm_provider: str = "default",
     image_provider: str = "default",
+    session=None,
 ) -> dict:
     try:
         brief = AdBrief(**json.loads(brief_json))
     except (ValidationError, ValueError, json.JSONDecodeError) as e:
         return {"ok": False, "error": str(e)}
 
-    llm = FakeLLMProvider() if llm_provider == "fake" else default_provider()
+    try:
+        llm = _resolve_llm(llm_provider, session)
+    except RuntimeError as e:
+        return {"ok": False, "error": str(e)}
+
     img_fn = _fake_image_fn if image_provider == "fake" else None
 
-    return run_pipeline(brief, llm_provider=llm, image_fn=img_fn)
+    return await run_pipeline(brief, llm_provider=llm, image_fn=img_fn)
 
 
 def register(mcp) -> None:
     @mcp.tool()
-    def adclip_generate_variants(
+    async def adclip_generate_variants(
         brief_json: str,
+        ctx: Context,
         llm_provider: str = "default",
         image_provider: str = "default",
     ) -> str:
@@ -59,11 +85,15 @@ def register(mcp) -> None:
 
         Args:
             brief_json: JSON-encoded AdBrief.
-            llm_provider: 'default' (Anthropic) or 'fake' (tests).
+            llm_provider: 'default'/'sampling' (asks Claude via MCP sampling),
+                'anthropic' (direct API key), or 'fake' (tests).
             image_provider: 'default' (fal.ai Flux) or 'fake' (tests).
         """
-        return json.dumps(_generate_variants_impl(
+        session = ctx.request_context.session
+        result = await _generate_variants_impl(
             brief_json,
             llm_provider=llm_provider,
             image_provider=image_provider,
-        ))
+            session=session,
+        )
+        return json.dumps(result)

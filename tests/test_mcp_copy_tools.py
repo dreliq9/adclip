@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 from adclip.mcp.copy_tools import (
@@ -18,21 +19,17 @@ BRIEF = dict(
 
 
 def test_generate_copy_with_fake_provider():
-    result = _generate_copy_impl(json.dumps(BRIEF), provider_name="fake")
+    result = asyncio.run(_generate_copy_impl(json.dumps(BRIEF), provider_name="fake"))
     assert result["ok"] is True
-    # 1 format × 2 angles, rank per bucket, variants=2 → 4 winners
     assert len(result["winners"]) == 4
     assert "pool" in result
-    assert len(result["pool"]) == 6  # 1 format × 2 angles × pool_size=3
+    assert len(result["pool"]) == 6
 
 
 def test_generate_copy_filters_policy_violations():
-    # Fake provider returns "Headline 1", "Body text 1 for the test.", etc.
-    # Add must_include that the fake never produces.
     brief = {**BRIEF, "must_include": ["NEVER_APPEARS_XYZ"]}
-    result = _generate_copy_impl(json.dumps(brief), provider_name="fake")
+    result = asyncio.run(_generate_copy_impl(json.dumps(brief), provider_name="fake"))
     assert result["ok"] is True
-    # All candidates violate must_include → winners empty
     assert len(result["winners"]) == 0
     assert len(result["rejected"]) > 0
 

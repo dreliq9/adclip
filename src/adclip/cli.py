@@ -1,7 +1,12 @@
-"""adclip CLI — thin wrapper over the MCP tool implementations."""
+"""adclip CLI — thin wrapper over the MCP tool implementations.
+
+The CLI path can't use MCP sampling (no connected client), so 'default' here
+means AnthropicProvider (needs ANTHROPIC_API_KEY) or 'fake' for tests.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -42,22 +47,24 @@ def estimate_cmd(brief_path: str) -> None:
 
 @main.command("copy")
 @click.argument("brief_path", type=click.Path(exists=True))
-@click.option("--provider", default="default", type=click.Choice(["default", "fake"]))
+@click.option("--provider", default="anthropic", type=click.Choice(["anthropic", "fake"]))
 def copy_cmd(brief_path: str, provider: str) -> None:
-    """Generate ad copy (no images/video)."""
-    out = _generate_copy_impl(Path(brief_path).read_text(), provider_name=provider)
+    """Generate ad copy (no images/video). CLI uses Anthropic SDK directly."""
+    out = asyncio.run(_generate_copy_impl(
+        Path(brief_path).read_text(), provider_name=provider
+    ))
     click.echo(json.dumps(out, indent=2))
 
 
 @main.command("run")
 @click.argument("brief_path", type=click.Path(exists=True))
-@click.option("--llm", default="default", type=click.Choice(["default", "fake"]))
+@click.option("--llm", default="anthropic", type=click.Choice(["anthropic", "fake"]))
 @click.option("--image", default="default", type=click.Choice(["default", "fake"]))
 def run_cmd(brief_path: str, llm: str, image: str) -> None:
     """Run the full pipeline for a brief JSON file."""
-    out = _generate_variants_impl(
+    out = asyncio.run(_generate_variants_impl(
         Path(brief_path).read_text(),
         llm_provider=llm,
         image_provider=image,
-    )
+    ))
     click.echo(json.dumps(out, indent=2))

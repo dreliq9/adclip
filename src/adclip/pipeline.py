@@ -46,7 +46,7 @@ def _default_image_fn(prompt, *, format_name, output_dir, seed):
     )
 
 
-def run_pipeline(
+async def run_pipeline(
     brief: AdBrief,
     *,
     llm_provider: LLMProvider | None = None,
@@ -58,7 +58,7 @@ def run_pipeline(
     root = init_campaign_dir(brief)
 
     # Copy
-    pool = generate_copy_pool(brief, provider=llm_provider)
+    pool = await generate_copy_pool(brief, provider=llm_provider)
     survivors, rejected = _filter(pool, brief)
     winners = rank_pool(survivors, n=brief.variants, per_bucket=True)
 

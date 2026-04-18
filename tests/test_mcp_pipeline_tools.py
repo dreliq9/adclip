@@ -1,3 +1,4 @@
+import asyncio
 import json
 import shutil
 
@@ -15,8 +16,8 @@ def test_generate_variants_with_fakes(tmp_path):
         output_dir=str(tmp_path / "camp"),
         variants=1, pool_size=2,
     )
-    result = _generate_variants_impl(
+    result = asyncio.run(_generate_variants_impl(
         json.dumps(brief), llm_provider="fake", image_provider="fake",
-    )
+    ))
     assert result["ok"] is True
     assert result["entries"]

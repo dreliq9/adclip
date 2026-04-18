@@ -24,8 +24,10 @@ def test_parse_copy_candidates_tolerates_prose_wrapper():
 
 
 def test_fake_provider_returns_deterministic_candidates():
+    import asyncio
+
     p = FakeLLMProvider()
-    text = p.generate(prompt="whatever", n=3)
+    text = asyncio.run(p.generate(prompt="whatever", n=3))
     parsed = parse_copy_candidates(text)
     assert len(parsed) == 3
     assert all("headline" in c for c in parsed)

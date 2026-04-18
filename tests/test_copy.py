@@ -1,3 +1,5 @@
+import asyncio
+
 from adclip.copy import generate_copy_pool, build_prompt
 from adclip.llm import FakeLLMProvider
 from adclip.schema import AdBrief
@@ -19,8 +21,8 @@ def test_build_prompt_mentions_format_constraints():
     brief = _brief()
     prompt = build_prompt(brief, format_name="meta_feed_4x5", angle="credibility")
     assert "meta_feed_4x5" in prompt or "4:5" in prompt.lower()
-    assert "40" in prompt  # headline max
-    assert "125" in prompt  # body max
+    assert "40" in prompt
+    assert "125" in prompt
     assert "credibility" in prompt
     assert brief.product in prompt
 
@@ -28,8 +30,7 @@ def test_build_prompt_mentions_format_constraints():
 def test_generate_copy_pool_returns_candidates():
     brief = _brief(pool_size=4)
     provider = FakeLLMProvider()
-    pool = generate_copy_pool(brief, provider=provider)
-    # 1 format × 1 angle × pool_size = 4
+    pool = asyncio.run(generate_copy_pool(brief, provider=provider))
     assert len(pool) == 4
     for c in pool:
         assert "headline" in c
@@ -46,6 +47,5 @@ def test_generate_copy_pool_multiple_angles_and_formats():
         pool_size=2,
     )
     provider = FakeLLMProvider()
-    pool = generate_copy_pool(brief, provider=provider)
-    # 2 formats × 2 angles × 2 per-call = 8
+    pool = asyncio.run(generate_copy_pool(brief, provider=provider))
     assert len(pool) == 8

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import shutil
 from pathlib import Path
@@ -52,7 +53,7 @@ def test_run_pipeline_static_only(tmp_path):
     provider = FakeLLMProvider()
     fake_img = FakeImageGen()
 
-    result = run_pipeline(brief, llm_provider=provider, image_fn=fake_img)
+    result = asyncio.run(run_pipeline(brief, llm_provider=provider, image_fn=fake_img))
 
     # manifest written
     root = Path(brief.output_dir)

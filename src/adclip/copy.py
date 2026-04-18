@@ -56,7 +56,7 @@ def build_prompt(brief: AdBrief, *, format_name: str, angle: str) -> str:
     )
 
 
-def generate_copy_pool(
+async def generate_copy_pool(
     brief: AdBrief, *, provider: LLMProvider
 ) -> list[dict]:
     """Generate a candidate pool across (format x angle) combos.
@@ -69,7 +69,7 @@ def generate_copy_pool(
     for fmt_name in brief.formats:
         for angle in brief.angles:
             prompt = build_prompt(brief, format_name=fmt_name, angle=angle)
-            raw = provider.generate(prompt, n=brief.pool_size)
+            raw = await provider.generate(prompt, n=brief.pool_size)
             cands = parse_copy_candidates(raw)
             for c in cands:
                 pool.append({
