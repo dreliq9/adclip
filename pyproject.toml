@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adclip"
+version = "0.1.0"
+description = "MCP server for ad creative generation — copy, images, video"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+    "pydantic>=2.0",
+    "av>=12.0",
+    "numpy>=1.26",
+    "Pillow>=10.0",
+    "mcp>=1.2.0",
+    "fal-client>=0.13",
+    "anthropic>=0.40",
+    "faster-whisper>=1.0",
+    "watchdog>=4.0",
+]
+
+[project.scripts]
+adclip = "adclip.cli:main"
+adclip-mcp = "adclip.mcp.server:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
