@@ -1,0 +1,16 @@
+{
+  "product": "Taichi crypto trading bot",
+  "value_prop": "Paper-trade our signals before risking real cash.",
+  "audience": "Skeptical retail crypto traders.",
+  "angles": ["credibility", "curiosity"],
+  "tone": "confident, dry, no hype",
+  "cta": "Start paper trading",
+  "formats": ["meta_feed_4x5", "google_rsa"],
+  "variants": 2,
+  "pool_size": 3,
+  "variant_strategy": "angles",
+  "policy_profile": "crypto",
+  "must_include": [],
+  "must_avoid": ["guaranteed returns", "get rich"],
+  "output_dir": "/tmp/adclip_taichi_smoke"
+}
