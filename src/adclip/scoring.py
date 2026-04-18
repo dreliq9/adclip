@@ -79,3 +79,34 @@ def rank_pool(
     for cands in buckets.values():
         out.extend(cands[:n])
     return out
+
+
+async def rank_with_judge(
+    pool: list[dict],
+    *,
+    brief,
+    provider,
+    n: int,
+    per_bucket: bool = False,
+) -> list[dict]:
+    """Rank a pool using LLM-as-judge scores instead of the heuristic.
+
+    Returns candidates augmented with judge_score, judge_rationale, judge_flags.
+    """
+    from adclip.judge import score_with_judge  # lazy import to avoid cycle
+
+    judged = [await score_with_judge(c, brief, provider=provider) for c in pool]
+    judged.sort(key=lambda c: c["judge_score"], reverse=True)
+
+    if not per_bucket:
+        return judged[:n]
+
+    buckets: dict[tuple[str, str], list[dict]] = {}
+    for c in judged:
+        key = (c.get("format", ""), c.get("angle", ""))
+        buckets.setdefault(key, []).append(c)
+
+    out: list[dict] = []
+    for cands in buckets.values():
+        out.extend(cands[:n])
+    return out
