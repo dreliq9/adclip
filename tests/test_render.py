@@ -20,6 +20,37 @@ def tmp_bg(tmp_path):
     return bg
 
 
+def test_render_draws_logo_image_overlay(tmp_bg, tmp_path):
+    logo = tmp_path / "logo.png"
+    Image.new("RGBA", (200, 200), color=(255, 0, 255, 255)).save(logo)
+
+    out = tmp_path / "out.png"
+    plan = {
+        "format": "meta_feed_4x5",
+        "kind": "static",
+        "overlays": [
+            {
+                "type": "image", "role": "logo",
+                "path": str(logo),
+                "position": "bottom_right",
+                "pad": 32,
+                "max_width": 100,
+            },
+        ],
+        "copy": {"headline": "H", "body": "B", "cta": "CTA", "angle": "a"},
+    }
+    render_static_ad(plan, background=str(tmp_bg), output=str(out))
+
+    rendered = Image.open(out).convert("RGB")
+    w, h = rendered.size
+    # logo is 100x100 after resize; anchored pad=32 from bottom-right edge.
+    # Sample 10px inside that square.
+    probe_x = w - 32 - 50
+    probe_y = h - 32 - 50
+    r, g, b = rendered.getpixel((probe_x, probe_y))
+    assert (r, g, b) == (255, 0, 255), f"expected magenta logo pixel, got {(r, g, b)}"
+
+
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 def test_render_static_produces_file(tmp_bg, tmp_path):
     out = tmp_path / "out.png"

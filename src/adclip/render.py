@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -48,17 +47,48 @@ def _draw_text_overlay(draw: ImageDraw.ImageDraw, overlay: dict, img_w: int, img
     )
 
 
+def _paste_image_overlay(base: Image.Image, overlay: dict) -> None:
+    src = Image.open(overlay["path"]).convert("RGBA")
+
+    max_w = overlay.get("max_width")
+    if max_w and src.width > max_w:
+        ratio = max_w / src.width
+        new_size = (max_w, max(1, int(src.height * ratio)))
+        src = src.resize(new_size, Image.Resampling.LANCZOS)
+
+    pad = overlay.get("pad", 32)
+    pos = overlay.get("position", "bottom_right")
+    bw, bh = base.size
+    sw, sh = src.size
+
+    if pos == "top_left":
+        xy = (pad, pad)
+    elif pos == "top_right":
+        xy = (bw - sw - pad, pad)
+    elif pos == "bottom_left":
+        xy = (pad, bh - sh - pad)
+    elif pos == "center":
+        xy = ((bw - sw) // 2, (bh - sh) // 2)
+    else:  # bottom_right (default)
+        xy = (bw - sw - pad, bh - sh - pad)
+
+    base.paste(src, xy, mask=src)
+
+
 def render_static_ad(plan: dict, *, background: str, output: str) -> None:
     if plan["kind"] != "static":
         raise ValueError(f"render_static_ad called on non-static plan: {plan['kind']}")
 
-    img = Image.open(background).convert("RGB")
-    draw = ImageDraw.Draw(img)
+    img = Image.open(background).convert("RGBA")
 
+    for ov in plan["overlays"]:
+        if ov["type"] == "image":
+            _paste_image_overlay(img, ov)
+
+    draw = ImageDraw.Draw(img)
     for ov in plan["overlays"]:
         if ov["type"] == "text":
             _draw_text_overlay(draw, ov, img.width, img.height)
-        # image overlays left for a later task -- not needed for minimal v0.1
 
     Path(output).parent.mkdir(parents=True, exist_ok=True)
-    img.save(output)
+    img.convert("RGB").save(output)
