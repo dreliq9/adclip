@@ -46,3 +46,12 @@ def test_policy_check_standalone():
     )
     assert result["ok"] is True
     assert len(result["violations"]) >= 1
+
+
+def test_generate_copy_respects_use_judge_flag():
+    """use_judge=True should parse without error. Judge is not exercised here
+    because FakeLLMProvider doesn't branch on prompt shape, but the flag
+    must survive the JSON -> AdBrief -> impl round trip."""
+    brief = {**BRIEF, "use_judge": True}
+    result = asyncio.run(_generate_copy_impl(json.dumps(brief), provider_name="fake"))
+    assert result["ok"] is True

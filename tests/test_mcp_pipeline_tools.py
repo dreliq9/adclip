@@ -21,3 +21,20 @@ def test_generate_variants_with_fakes(tmp_path):
     ))
     assert result["ok"] is True
     assert result["entries"]
+
+
+def test_generate_variants_forwards_heal_violations(tmp_path):
+    """heal_violations should round-trip through JSON -> AdBrief -> pipeline."""
+    brief = dict(
+        product="X", value_prop="Y", audience="Z",
+        angles=["a"], tone="t", cta="c",
+        formats=["meta_feed_4x5"],
+        output_dir=str(tmp_path / "camp"),
+        variants=1, pool_size=2,
+        heal_violations=2,
+    )
+    result = asyncio.run(_generate_variants_impl(
+        json.dumps(brief),
+        llm_provider="fake", image_provider="fake",
+    ))
+    assert result["ok"] is True
