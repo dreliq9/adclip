@@ -54,6 +54,8 @@ def test_policy_profile_allowed_values():
     for p in ["default", "crypto", "health", "alcohol", "financial_services"]:
         brief = minimal_brief(policy_profile=p)
         assert brief.policy_profile == p
+    with pytest.raises(ValidationError):
+        minimal_brief(policy_profile="bogus")
 
 
 def test_budget_must_be_positive_if_set():
@@ -63,3 +65,22 @@ def test_budget_must_be_positive_if_set():
         minimal_brief(budget_usd=-1)
     ok = minimal_brief(budget_usd=10.0)
     assert ok.budget_usd == 10.0
+    assert minimal_brief(budget_usd=None).budget_usd is None
+
+
+def test_variants_boundaries():
+    with pytest.raises(ValidationError):
+        minimal_brief(variants=0, pool_size=15)
+    with pytest.raises(ValidationError):
+        minimal_brief(variants=51, pool_size=60)
+    assert minimal_brief(variants=1, pool_size=1).variants == 1
+    assert minimal_brief(variants=50, pool_size=60).variants == 50
+
+
+def test_pool_size_boundaries():
+    with pytest.raises(ValidationError):
+        minimal_brief(pool_size=0)
+    with pytest.raises(ValidationError):
+        minimal_brief(variants=1, pool_size=101)
+    assert minimal_brief(variants=1, pool_size=1).pool_size == 1
+    assert minimal_brief(variants=1, pool_size=100).pool_size == 100
