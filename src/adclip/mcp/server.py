@@ -3,6 +3,10 @@
 import logging
 import sys
 
+from adclip import _env
+
+_env.load()
+
 from mcp.server.fastmcp import FastMCP
 
 # All logging to stderr (MCP uses stdio for transport)

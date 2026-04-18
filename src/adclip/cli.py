@@ -7,6 +7,10 @@ from pathlib import Path
 
 import click
 
+from adclip import _env
+
+_env.load()
+
 from adclip.formats import FORMATS
 from adclip.mcp.brief_tools import _estimate_cost_impl
 from adclip.mcp.copy_tools import _generate_copy_impl
