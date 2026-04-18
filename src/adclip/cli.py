@@ -47,7 +47,16 @@ def estimate_cmd(brief_path: str) -> None:
 
 @main.command("copy")
 @click.argument("brief_path", type=click.Path(exists=True))
-@click.option("--provider", default="anthropic", type=click.Choice(["anthropic", "fake"]))
+@click.option(
+    "--provider",
+    default="claude-cli",
+    type=click.Choice(["claude-cli", "anthropic", "fake"]),
+    help=(
+        "LLM provider. 'claude-cli' (default) shells out to the claude CLI "
+        "using subscription auth (no API key). 'anthropic' uses the direct "
+        "API and requires ANTHROPIC_API_KEY. 'fake' is for tests."
+    ),
+)
 def copy_cmd(brief_path: str, provider: str) -> None:
     """Generate ad copy (no images/video). CLI uses Anthropic SDK directly."""
     out = asyncio.run(_generate_copy_impl(
@@ -58,7 +67,16 @@ def copy_cmd(brief_path: str, provider: str) -> None:
 
 @main.command("run")
 @click.argument("brief_path", type=click.Path(exists=True))
-@click.option("--llm", default="anthropic", type=click.Choice(["anthropic", "fake"]))
+@click.option(
+    "--llm",
+    default="claude-cli",
+    type=click.Choice(["claude-cli", "anthropic", "fake"]),
+    help=(
+        "LLM provider. 'claude-cli' (default) shells out to the claude CLI "
+        "using subscription auth. 'anthropic' uses the direct API and "
+        "requires ANTHROPIC_API_KEY. 'fake' is for tests."
+    ),
+)
 @click.option("--image", default="default", type=click.Choice(["default", "fake"]))
 def run_cmd(brief_path: str, llm: str, image: str) -> None:
     """Run the full pipeline for a brief JSON file."""
