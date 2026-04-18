@@ -12,9 +12,10 @@ mcp = FastMCP("adclip")
 
 
 def _register_all():
-    from adclip.mcp import brief_tools
+    from adclip.mcp import brief_tools, copy_tools
 
     brief_tools.register(mcp)
+    copy_tools.register(mcp)
 
 
 _register_all()
