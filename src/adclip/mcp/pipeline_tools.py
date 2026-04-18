@@ -12,7 +12,6 @@ from adclip.llm import (
     FakeLLMProvider,
     LLMProvider,
     SamplingLLMProvider,
-    default_provider,
 )
 from adclip.pipeline import run_pipeline
 from adclip.schema import AdBrief
@@ -43,11 +42,16 @@ def _resolve_llm(name: str, session) -> LLMProvider:
     if name == "sampling" or name == "default":
         if session is None:
             raise RuntimeError(
-                "sampling provider requires an MCP session (no ctx available)"
+                "sampling provider requires an MCP session. Try llm_provider="
+                "'claude-cli' if no sampling-capable client is connected."
             )
         return SamplingLLMProvider(session)
+    if name == "claude-cli":
+        from adclip.claude_cli import ClaudeCliProvider
+        return ClaudeCliProvider()
     if name == "anthropic":
-        return default_provider()
+        from adclip.llm import AnthropicProvider
+        return AnthropicProvider()
     raise ValueError(f"Unknown llm_provider: {name}")
 
 

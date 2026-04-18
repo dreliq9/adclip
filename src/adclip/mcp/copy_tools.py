@@ -18,7 +18,6 @@ from adclip.llm import (
     FakeLLMProvider,
     LLMProvider,
     SamplingLLMProvider,
-    default_provider,
 )
 from adclip.policy import check_copy
 from adclip.schema import AdBrief
@@ -31,11 +30,16 @@ def _get_provider(name: str, *, session=None) -> LLMProvider:
     if name == "sampling" or name == "default":
         if session is None:
             raise RuntimeError(
-                "sampling provider requires an MCP session (no ctx available)"
+                "sampling provider requires an MCP session. Try provider="
+                "'claude-cli' if no sampling-capable client is connected."
             )
         return SamplingLLMProvider(session)
+    if name == "claude-cli":
+        from adclip.claude_cli import ClaudeCliProvider
+        return ClaudeCliProvider()
     if name == "anthropic":
-        return default_provider()
+        from adclip.llm import AnthropicProvider
+        return AnthropicProvider()
     raise ValueError(f"Unknown provider: {name}")
 
 

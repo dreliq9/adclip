@@ -56,3 +56,12 @@ def test_generate_copy_respects_use_judge_flag():
     brief = {**BRIEF, "use_judge": True}
     result = asyncio.run(_generate_copy_impl(json.dumps(brief), provider_name="fake"))
     assert result["ok"] is True
+
+
+def test_get_provider_claude_cli_branch():
+    """_get_provider should resolve 'claude-cli' without a session."""
+    from adclip.mcp.copy_tools import _get_provider
+    from adclip.claude_cli import ClaudeCliProvider
+
+    provider = _get_provider("claude-cli", session=None)
+    assert isinstance(provider, ClaudeCliProvider)
