@@ -97,6 +97,16 @@ def test_render_tolerates_missing_overlays_key(tmp_bg, tmp_path):
     assert out.exists()
 
 
+def test_render_tolerates_overlays_none(tmp_bg, tmp_path):
+    # JSON round-trip can produce {"overlays": null}; don't crash.
+    out = tmp_path / "out.png"
+    render_static_ad(
+        {"kind": "static", "overlays": None},
+        background=str(tmp_bg), output=str(out),
+    )
+    assert out.exists()
+
+
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 def test_render_static_produces_file(tmp_bg, tmp_path):
     out = tmp_path / "out.png"

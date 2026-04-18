@@ -88,7 +88,7 @@ def render_static_ad(plan: dict, *, background: str, output: str) -> None:
     if kind != "static":
         raise ValueError(f"render_static_ad called on non-static plan: {kind!r}")
 
-    overlays = plan.get("overlays", [])
+    overlays = plan.get("overlays") or []
     img = Image.open(background).convert("RGBA")
 
     for ov in overlays:

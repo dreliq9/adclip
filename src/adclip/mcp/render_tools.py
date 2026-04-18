@@ -92,7 +92,7 @@ def _render_variant_impl(
         try:
             resolved = bg_path.resolve()
             resolved.relative_to(root.resolve())
-        except ValueError:
+        except (ValueError, OSError, RuntimeError):
             return {
                 "ok": False,
                 "error": (
