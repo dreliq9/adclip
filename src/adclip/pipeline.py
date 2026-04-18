@@ -23,9 +23,22 @@ from adclip.schema import AdBrief
 from adclip.scoring import rank_pool
 
 
-def _filter(pool: list[dict], brief: AdBrief) -> tuple[list[dict], list[dict]]:
+async def _filter_with_heal(
+    pool: list[dict],
+    brief: AdBrief,
+    *,
+    llm_provider,
+) -> tuple[list[dict], list[dict]]:
+    """Split pool into (survivors, permanently_rejected).
+
+    Violators with brief.heal_violations > 0 are sent to heal.heal_candidate.
+    Successful heals land in survivors; failed heals go to rejected.
+    """
+    from adclip.heal import heal_candidate
+
     survivors: list[dict] = []
     rejected: list[dict] = []
+
     for c in pool:
         fmt = get_format(c["format"])
         r = check_copy(
@@ -33,10 +46,23 @@ def _filter(pool: list[dict], brief: AdBrief) -> tuple[list[dict], list[dict]]:
             format_spec=fmt, profile=brief.policy_profile,
             must_include=brief.must_include, must_avoid=brief.must_avoid,
         )
-        if r.violations:
-            rejected.append({**c, "violations": r.violations, "warnings": r.warnings})
-        else:
+        if not r.violations:
             survivors.append({**c, "warnings": r.warnings})
+            continue
+
+        if brief.heal_violations > 0:
+            healed = await heal_candidate(
+                c, brief=brief, violations=r.violations,
+                provider=llm_provider, max_retries=brief.heal_violations,
+            )
+            if healed is not None:
+                survivors.append(healed)
+                continue
+
+        rejected.append({
+            **c, "violations": r.violations, "warnings": r.warnings,
+        })
+
     return survivors, rejected
 
 
@@ -59,8 +85,18 @@ async def run_pipeline(
 
     # Copy
     pool = await generate_copy_pool(brief, provider=llm_provider)
-    survivors, rejected = _filter(pool, brief)
-    winners = rank_pool(survivors, n=brief.variants, per_bucket=True)
+    survivors, rejected = await _filter_with_heal(
+        pool, brief, llm_provider=llm_provider,
+    )
+
+    if brief.use_judge:
+        from adclip.scoring import rank_with_judge
+        winners = await rank_with_judge(
+            survivors, brief=brief, provider=llm_provider,
+            n=brief.variants, per_bucket=True,
+        )
+    else:
+        winners = rank_pool(survivors, n=brief.variants, per_bucket=True)
 
     # Dump rejected
     if rejected:
