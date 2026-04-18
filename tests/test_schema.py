@@ -84,3 +84,30 @@ def test_pool_size_boundaries():
         minimal_brief(variants=1, pool_size=101)
     assert minimal_brief(variants=1, pool_size=1).pool_size == 1
     assert minimal_brief(variants=1, pool_size=100).pool_size == 100
+
+
+def test_use_judge_defaults_false():
+    brief = minimal_brief()
+    assert brief.use_judge is False
+
+
+def test_use_judge_can_be_set_true():
+    brief = minimal_brief(use_judge=True)
+    assert brief.use_judge is True
+
+
+def test_heal_violations_defaults_zero():
+    brief = minimal_brief()
+    assert brief.heal_violations == 0
+
+
+def test_heal_violations_must_be_nonneg():
+    import pytest
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        minimal_brief(heal_violations=-1)
+
+
+def test_heal_violations_accepts_positive():
+    brief = minimal_brief(heal_violations=3)
+    assert brief.heal_violations == 3

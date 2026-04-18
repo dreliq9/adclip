@@ -45,6 +45,12 @@ class AdBrief(BaseModel):
     output_dir: str = Field(min_length=1)
     budget_usd: float | None = Field(default=None, gt=0)
 
+    # Self-review loops (v0.2)
+    use_judge: bool = False
+    # Max retries to rewrite a policy-violating candidate before giving up.
+    # 0 disables healing entirely (v0.1 behavior).
+    heal_violations: int = Field(default=0, ge=0, le=5)
+
     @field_validator("formats")
     @classmethod
     def _formats_must_be_known(cls, v: list[str]) -> list[str]:
