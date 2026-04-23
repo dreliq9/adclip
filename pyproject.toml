@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adclip"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server for ad creative generation — copy and static images from a single JSON brief"
 readme = "README.md"
 requires-python = ">=3.11"

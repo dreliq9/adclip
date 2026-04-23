@@ -1,5 +1,7 @@
 # adclip
 
+<!-- mcp-name: io.github.dreliq9/adclip -->
+
 Ad creative generation — copy and static images — from a single JSON brief.
 Runs as an MCP server (zero-config under Claude Code) or as a CLI.
 

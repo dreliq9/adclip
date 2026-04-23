@@ -45,3 +45,10 @@ output/
 # fal.ai / LLM caches
 .fal_cache/
 .llm_cache/
+
+# mcp-publisher credentials (never commit)
+.mcpregistry_github_token
+.mcpregistry_registry_token
+
+# r2-d2 MCP cache (unrelated, local only)
+.swu-mcp-cache/
