@@ -12,24 +12,44 @@ silently bill you.
 ## Install
 
 ```bash
-git clone <this repo> ~/Desktop/adclip
-cd ~/Desktop/adclip
-python3.11 -m venv .venv
-.venv/bin/pip install -e ".[dev]"
+pipx install adclip
+```
+
+For the optional direct-Anthropic-API provider:
+
+```bash
+pipx install "adclip[anthropic]"
 ```
 
 Requires Python 3.11+ and the [claude CLI](https://docs.claude.com/claude-code)
 on `$PATH` (for the default keyless LLM path).
 
+### From source (for contributors)
+
+```bash
+git clone https://github.com/dreliq9/adclip.git
+cd adclip
+python3.11 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+```
+
 ## Two usage paths
 
 ### 1. MCP server (recommended under Claude Code)
 
-```bash
-# .mcp.json is already in the repo — Claude Code picks it up automatically.
-# Then ask Claude:
-#   "Generate ad variants for examples/taichi_brief.json"
+Add to your project's `.mcp.json` (or `~/.claude.json`):
+
+```json
+{
+  "mcpServers": {
+    "adclip": {
+      "command": "adclip-mcp"
+    }
+  }
+}
 ```
+
+Then ask Claude: *"Generate ad variants for examples/taichi_brief.json"*
 
 Tools exposed:
 
@@ -110,7 +130,7 @@ produce video assets (v0.1 is static + text only). They land with a
 |-----------------|---------|-------------------------------------|
 | `default` / `claude-cli` | none | Subprocess to the `claude` CLI; uses your subscription auth. |
 | `sampling`      | none    | MCP sampling — asks the calling MCP client to run the LLM. Only works under clients that implement sampling (Claude Code does not today). |
-| `anthropic`     | required + `ADCLIP_ALLOW_LIVE_APIS=1` | Direct Anthropic API. ~3x faster per call. |
+| `anthropic`     | `adclip[anthropic]` extra + key + `ADCLIP_ALLOW_LIVE_APIS=1` | Direct Anthropic API. ~3x faster per call. |
 | `fake`          | none    | Deterministic scripted responses for tests. |
 
 ## Live-API opt-in
