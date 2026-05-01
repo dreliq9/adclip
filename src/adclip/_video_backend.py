@@ -9,7 +9,7 @@ adopt, sync the relevant section here. Sync triggers we expect:
   hardcoded aliases beyond the live-fetched catalog
 - declip refines the loudnorm two-pass logic
 
-Source of truth: ~/Desktop/mcps/declip/src/declip/{fetch_models,ops}.py.
+Source of truth: declip's `fetch_models.py` and `ops.py` (sibling repo).
 """
 from __future__ import annotations
 
