@@ -83,11 +83,13 @@ def copy_cmd(brief_path: str, provider: str) -> None:
     ),
 )
 @click.option("--image", default="default", type=click.Choice(["default", "fake"]))
-def run_cmd(brief_path: str, llm: str, image: str) -> None:
+@click.option("--video", default="default", type=click.Choice(["default", "fake"]))
+def run_cmd(brief_path: str, llm: str, image: str, video: str) -> None:
     """Run the full pipeline for a brief JSON file."""
     out = asyncio.run(_generate_variants_impl(
         Path(brief_path).read_text(),
         llm_provider=llm,
         image_provider=image,
+        video_provider=video,
     ))
     click.echo(json.dumps(out, indent=2))

@@ -137,8 +137,13 @@ The CLI uses `claude-cli` by default — no key setup needed.
 | `tiktok_9x16`                | 9:16    | 1080×1920   | video¹ |
 | `youtube_shorts_9x16`        | 9:16    | 1080×1920   | video¹ |
 
-¹ Video formats are declared in the schema but the pipeline does not yet
-produce video assets (v0.1 is static + text only).
+¹ Video formats produce a fal.ai-generated clip (default `kling-2.6`, 5s)
+with headline + CTA burned in via FFmpeg `drawtext`, scaled/padded to the
+format's dimensions, and (when audio is present) loudness-normalized to
+the format's LUFS target. Requires an `ffmpeg` build with the `drawtext`
+filter (i.e. compiled with freetype). Set `ADCLIP_ALLOW_LIVE_APIS=1` and
+`FAL_KEY` to enable; pass `--video fake` (CLI) or `video_provider="fake"`
+(MCP) for tests.
 
 ## LLM provider modes
 
@@ -179,8 +184,7 @@ billing you. Default keyless paths never need this set.
 
 ## Status
 
-v0.1 — static images and text ads, 12 MCP tools, CLI, four LLM providers
-(claude-cli / sampling / anthropic / fake), Meta DCO export, self-review
-loops (policy + heal + semantic + judge).
-
-Video pipeline is deferred.
+v0.1 — static images, text ads, and 9:16 video ads (Reels / TikTok /
+Shorts) via fal.ai (declip-driven model catalog). 12 MCP tools, CLI, four
+LLM providers (claude-cli / sampling / anthropic / fake), Meta DCO export,
+self-review loops (policy + heal + semantic + judge).

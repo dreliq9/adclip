@@ -12,7 +12,7 @@ from adclip.campaign import init_campaign_dir, variant_dir, write_manifest
 from adclip.compose import build_overlay_plan
 from adclip.formats import get_format
 from adclip.image_gen import build_image_prompt
-from adclip.render import render_static_ad
+from adclip.render import render_static_ad, render_video_ad
 from adclip.schema import AdBrief
 
 
@@ -34,6 +34,7 @@ def _generate_visuals_impl(
     copies_json: str,
     *,
     image_fn: Callable | None = None,
+    video_fn: Callable | None = None,
 ) -> dict:
     try:
         brief = AdBrief(**json.loads(brief_json))
@@ -51,6 +52,8 @@ def _generate_visuals_impl(
 
     if image_fn is None:
         from adclip.image_gen import generate_image as image_fn  # type: ignore
+    if video_fn is None:
+        from adclip.video_gen import generate_ad_clip as video_fn  # type: ignore
 
     root = init_campaign_dir(brief)
     entries: list[dict] = []
@@ -98,11 +101,22 @@ def _generate_visuals_impl(
             continue
 
         # video
+        prompt = build_image_prompt(
+            brief, format_name=copy["format"], variant_copy=copy,
+        )
+        clip = video_fn(
+            prompt, format_name=copy["format"], output_dir=str(vdir), seed=i,
+        )
+        total_cost += clip.cost_usd
+        plan = build_overlay_plan(
+            format_name=copy["format"], copy=copy, logo_path=brief.logo_path,
+        )
+        final = vdir / f"{copy['format']}.mp4"
+        render_video_ad(plan, background=clip.local_path, output=str(final))
         entries.append({
             "variant_id": vid,
             "format": copy["format"],
-            "path": None,
-            "note": "video formats not yet implemented in pipeline",
+            "path": f"variants/{vid}/{copy['format']}.mp4",
         })
 
     write_manifest(brief, entries=entries, cost_usd=total_cost)
@@ -120,6 +134,7 @@ def register(mcp) -> None:
         brief_json: str,
         copies_json: str,
         image_provider: str = "default",
+        video_provider: str = "default",
     ) -> str:
         """Produce visuals for an existing set of copies — no LLM call.
 
@@ -133,13 +148,19 @@ def register(mcp) -> None:
                 ``headline``, ``body``, ``cta``, ``format``, and
                 typically ``angle``.
             image_provider: 'default' (fal.ai Flux) or 'fake' (tests).
+            video_provider: 'default' (fal.ai via declip) or 'fake' (tests).
         """
         image_fn = None
         if image_provider == "fake":
             from adclip.mcp.pipeline_tools import _fake_image_fn
             image_fn = _fake_image_fn
 
+        video_fn = None
+        if video_provider == "fake":
+            from adclip.mcp.pipeline_tools import _fake_video_fn
+            video_fn = _fake_video_fn
+
         result = _generate_visuals_impl(
-            brief_json, copies_json, image_fn=image_fn,
+            brief_json, copies_json, image_fn=image_fn, video_fn=video_fn,
         )
         return json.dumps(result)

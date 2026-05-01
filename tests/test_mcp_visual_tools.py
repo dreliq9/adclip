@@ -1,7 +1,10 @@
 import json
+import shutil
 from pathlib import Path
 
-from adclip.mcp.pipeline_tools import _fake_image_fn
+import pytest
+
+from adclip.mcp.pipeline_tools import _fake_image_fn, _fake_video_fn
 from adclip.mcp.visual_tools import _generate_visuals_impl
 
 
@@ -95,12 +98,19 @@ def test_unknown_format_returns_error(tmp_path):
     assert "not_a_real_format" in out["error"]
 
 
-def test_video_format_passes_through_with_note(tmp_path):
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_video_format_renders_mp4(tmp_path):
+    from adclip.render import has_drawtext
+
+    if not has_drawtext():
+        pytest.skip("ffmpeg lacks drawtext filter (rebuild with freetype)")
     out = _generate_visuals_impl(
         _brief_json(tmp_path, formats=["tiktok_9x16"]),
         json.dumps([_copy(format="tiktok_9x16")]),
         image_fn=_fake_image_fn,
+        video_fn=_fake_video_fn,
     )
     assert out["ok"] is True
-    assert out["entries"][0]["path"] is None
-    assert "video" in out["entries"][0]["note"].lower()
+    entry = out["entries"][0]
+    assert entry["path"].endswith("tiktok_9x16.mp4")
+    assert (tmp_path / "camp" / entry["path"]).exists()

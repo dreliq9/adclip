@@ -35,3 +35,17 @@ def test_text_only_format_uses_kind_text():
     )
     assert plan["kind"] == "text"
     assert plan["overlays"] == []
+
+
+def test_video_plan_carries_dimensions_and_lufs_target():
+    plan = build_overlay_plan(
+        format_name="tiktok_9x16",
+        copy={"headline": "H", "body": "B", "cta": "C", "angle": "a"},
+        logo_path=None,
+    )
+    assert plan["kind"] == "video"
+    assert plan["width"] == 1080
+    assert plan["height"] == 1920
+    assert plan["lufs_target"] == -14.0
+    roles = [o["role"] for o in plan["overlays"] if o["type"] == "text"]
+    assert "headline" in roles and "cta" in roles

@@ -2,7 +2,8 @@
 
 For static formats: emit overlay descriptors (headline, CTA, optional logo).
 For text-only formats (google_rsa): no overlays — copy is the ad.
-For video formats: covered in Phase 6.
+For video formats: emit headline/CTA drawtext descriptors plus the format's
+LUFS target so render_video_ad can normalize loudness.
 """
 
 from __future__ import annotations
@@ -65,11 +66,44 @@ def build_overlay_plan(
             "copy": copy,
         }
 
-    # video: handled in Phase 6
+    # video
+    overlays: list[dict] = [
+        {
+            "type": "text",
+            "role": "headline",
+            "text": copy["headline"],
+            "position": "top",
+            "pad": 96,
+            "font_size": max(56, fmt.width // 16),
+            "color": "#ffffff",
+            "stroke": "#000000",
+        },
+        {
+            "type": "text",
+            "role": "cta",
+            "text": copy["cta"],
+            "position": "bottom",
+            "pad": 200,
+            "font_size": max(48, fmt.width // 18),
+            "color": "#ffffff",
+            "stroke": "#000000",
+        },
+    ]
+    if logo_path:
+        overlays.append({
+            "type": "image",
+            "role": "logo",
+            "path": logo_path,
+            "position": "bottom_right",
+            "pad": 48,
+            "max_width": fmt.width // 6,
+        })
     return {
         "format": format_name,
         "kind": "video",
-        "overlays": [],
+        "overlays": overlays,
         "copy": copy,
-        "note": "video compose in Phase 6",
+        "width": fmt.width,
+        "height": fmt.height,
+        "lufs_target": fmt.lufs_target,
     }

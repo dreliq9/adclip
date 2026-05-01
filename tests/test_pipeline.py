@@ -70,6 +70,43 @@ def test_run_pipeline_static_only(tmp_path):
     assert fake_img.calls == 2
 
 
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+def test_run_pipeline_video_format(tmp_path):
+    from adclip.mcp.pipeline_tools import _fake_video_fn
+    from adclip.render import has_drawtext
+
+    if not has_drawtext():
+        pytest.skip("ffmpeg lacks drawtext filter (rebuild with freetype)")
+
+    brief = AdBrief(
+        product="Taichi",
+        value_prop="Paper trade first",
+        audience="Crypto traders",
+        angles=["credibility"],
+        tone="dry",
+        cta="Start paper trading",
+        formats=["tiktok_9x16"],
+        output_dir=str(tmp_path / "camp"),
+        variants=1, pool_size=1,
+    )
+    fake_img = FakeImageGen()
+
+    result = asyncio.run(run_pipeline(
+        brief, llm_provider=FakeLLMProvider(),
+        image_fn=fake_img, video_fn=_fake_video_fn,
+    ))
+
+    root = Path(brief.output_dir)
+    assert (root / "manifest.json").exists()
+    m = json.loads((root / "manifest.json").read_text())
+    assert len(m["entries"]) == 1
+    entry = m["entries"][0]
+    assert entry["path"].endswith("tiktok_9x16.mp4")
+    assert (root / entry["path"]).exists()
+    # raw clip persists alongside the rendered ad
+    assert any(Path(root / "variants" / "v01").glob("tiktok_9x16_*_raw.mp4"))
+
+
 def test_run_pipeline_heals_violations(tmp_path):
     """With heal_violations > 0, violating candidates get rewritten."""
     import asyncio

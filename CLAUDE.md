@@ -1,5 +1,24 @@
 # CLAUDE.md — adclip project context
 
+## Vendored declip slice
+
+`src/adclip/_video_backend.py` is a small (~350-line) vendored slice of
+declip's `fetch_models.py` and `ops.loudnorm`. It is the **only** code
+adclip needs from declip; the rest of declip's video-editor surface is
+out of scope here. adclip is pipx-installable as a single package — do
+not add `declip` as a runtime dependency.
+
+When to sync `_video_backend.py` against declip:
+
+- fal.ai redesigns its `/explore` page (breaks `_CARD_PATTERN`)
+- New model families ship and we want hardcoded aliases beyond the live
+  catalog (Kling/Wan/Veo/Sora successors)
+- declip refines the loudnorm two-pass logic in a way we want
+
+The earlier `render_schema.py` + `backends/ffmpeg.py` vendoring drifted
+because those files were huge AND adclip didn't actually use them. The
+current slice is small, fully exercised, and easy to keep in sync.
+
 ## No API key, by construction
 
 adclip never requires `ANTHROPIC_API_KEY`. Any runtime error mentioning a

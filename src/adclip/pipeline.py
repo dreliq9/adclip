@@ -18,8 +18,9 @@ from adclip.formats import get_format
 from adclip.image_gen import build_image_prompt, generate_image
 from adclip.llm import LLMProvider, default_provider
 from adclip.policy import check_copy
-from adclip.render import render_static_ad
+from adclip.render import render_static_ad, render_video_ad
 from adclip.schema import AdBrief
+from adclip.video_gen import generate_ad_clip
 from adclip.scoring import (
     ensure_format_coverage,
     ensure_variant_diversity,
@@ -87,6 +88,12 @@ def _default_image_fn(prompt, *, format_name, output_dir, seed):
     )
 
 
+def _default_video_fn(prompt, *, format_name, output_dir, seed):
+    return generate_ad_clip(
+        prompt, format_name=format_name, output_dir=output_dir, seed=seed,
+    )
+
+
 def _entry_from_winner(winner: dict, *, variant_id: str, path: str | None) -> dict:
     entry: dict = {
         "variant_id": variant_id,
@@ -106,9 +113,11 @@ async def run_pipeline(
     *,
     llm_provider: LLMProvider | None = None,
     image_fn: Callable | None = None,
+    video_fn: Callable | None = None,
 ) -> dict:
     llm_provider = llm_provider or default_provider()
     image_fn = image_fn or _default_image_fn
+    video_fn = video_fn or _default_video_fn
 
     root = init_campaign_dir(brief)
 
@@ -176,10 +185,21 @@ async def run_pipeline(
             ))
             continue
 
-        # video: to be implemented in Phase 6 follow-up
-        entry = _entry_from_winner(w, variant_id=vid, path=None)
-        entry["note"] = "video formats not yet implemented in pipeline"
-        entries.append(entry)
+        # video
+        prompt = build_image_prompt(brief, format_name=w["format"], variant_copy=w)
+        clip = video_fn(
+            prompt, format_name=w["format"], output_dir=str(vdir), seed=i,
+        )
+        total_cost += clip.cost_usd
+        plan = build_overlay_plan(
+            format_name=w["format"], copy=w, logo_path=brief.logo_path,
+        )
+        final = vdir / f"{w['format']}.mp4"
+        render_video_ad(plan, background=clip.local_path, output=str(final))
+        entries.append(_entry_from_winner(
+            w, variant_id=vid,
+            path=f"variants/{vid}/{w['format']}.mp4",
+        ))
 
     write_manifest(brief, entries=entries, cost_usd=total_cost)
     return {

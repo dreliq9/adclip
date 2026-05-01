@@ -1,6 +1,10 @@
-"""AI video generation via fal.ai — Kling 3.0, Wan 2.5, and other models.
+"""AI video generation via fal.ai — Kling, Wan, Veo, Sora, and other models.
 
 Requires FAL_KEY environment variable to be set.
+
+Model catalog + per-second cost data live in adclip._video_backend, which
+is a vendored slice of declip.fetch_models. Sync there when fal.ai adds
+new model families or redesigns its explore page.
 """
 
 from __future__ import annotations
@@ -13,42 +17,20 @@ from urllib.request import urlretrieve
 
 import fal_client
 
+from adclip._video_backend import (
+    ALIASES as MODELS,
+    MODEL_COST_PER_SEC as _ENDPOINT_COSTS,
+    cost_per_sec as _cost_per_sec,
+    resolve_endpoint,
+    to_image_to_video,
+)
 
-# ---------------------------------------------------------------------------
-# Model registry
-# ---------------------------------------------------------------------------
-
-MODELS = {
-    # Kling 3.0
-    "kling-3": "fal-ai/kling-video/v3/standard/text-to-video",
-    "kling-3-pro": "fal-ai/kling-video/v3/pro/text-to-video",
-    "kling-3-i2v": "fal-ai/kling-video/v3/standard/image-to-video",
-    "kling-3-i2v-pro": "fal-ai/kling-video/v3/pro/image-to-video",
-    # Kling 2.6
-    "kling-2.6": "fal-ai/kling-video/v2.6/standard/text-to-video",
-    "kling-2.6-pro": "fal-ai/kling-video/v2.6/pro/text-to-video",
-    "kling-2.6-i2v": "fal-ai/kling-video/v2.6/standard/image-to-video",
-    # Wan 2.5
-    "wan-2.5": "fal-ai/wan-25-preview/text-to-video",
-    "wan-2.5-i2v": "fal-ai/wan-25-preview/image-to-video",
-    # Wan 2.6
-    "wan-2.6": "fal-ai/wan/v2.6/text-to-video",
-    "wan-2.6-i2v": "fal-ai/wan/v2.6/image-to-video",
-    # Budget options
-    "ltx": "fal-ai/ltx-video",
-    "luma-flash": "fal-ai/luma-dream-machine/ray-2-flash",
-    "luma": "fal-ai/luma-dream-machine/ray-2",
-    # Premium
-    "veo-3": "fal-ai/veo3",
-}
-
-# Approximate cost per second (for estimation, not billing)
-MODEL_COST_PER_SEC = {
-    "kling-3": 0.17, "kling-3-pro": 0.22,
-    "kling-2.6": 0.07, "kling-2.6-pro": 0.14,
-    "wan-2.5": 0.05, "wan-2.6": 0.06,
-    "ltx": 0.008, "luma-flash": 0.04, "luma": 0.10,
-    "veo-3": 0.40,
+# Alias-keyed cost view kept for back-compat with any caller that imports
+# this constant directly. Prefer cost_per_sec(model) for new code.
+MODEL_COST_PER_SEC: dict[str, float] = {
+    alias: _ENDPOINT_COSTS[endpoint]
+    for alias, endpoint in MODELS.items()
+    if endpoint in _ENDPOINT_COSTS
 }
 
 
@@ -63,10 +45,6 @@ def _check_key():
         )
 
 
-# ---------------------------------------------------------------------------
-# Generation
-# ---------------------------------------------------------------------------
-
 @dataclass
 class GenerationResult:
     video_url: str
@@ -75,6 +53,15 @@ class GenerationResult:
     duration: float
     estimated_cost: float
     seed: int | None = None
+
+
+@dataclass(frozen=True)
+class VideoResult:
+    local_path: str
+    url: str
+    model: str
+    cost_usd: float
+    duration: float
 
 
 def _progress_callback(update):
@@ -102,7 +89,7 @@ def generate_video(
 
     Args:
         prompt: Text description of the video to generate
-        model: Model name from MODELS registry (e.g., "kling-3", "wan-2.5")
+        model: Alias from MODELS (e.g. "kling-3", "veo-3.1") or raw endpoint
         duration: Duration in seconds (model-dependent, typically 3-15)
         aspect_ratio: "16:9", "9:16", or "1:1"
         output_path: Where to save the video (None = don't download)
@@ -116,19 +103,10 @@ def generate_video(
     """
     _check_key()
 
-    # Resolve model endpoint
-    if model in MODELS:
-        endpoint = MODELS[model]
-    else:
-        endpoint = model  # Allow raw endpoint IDs
+    endpoint = resolve_endpoint(model)
+    if image_path:
+        endpoint = to_image_to_video(endpoint)
 
-    # Auto-switch to i2v endpoint if image provided
-    if image_path and not model.endswith("-i2v"):
-        i2v_model = model + "-i2v"
-        if i2v_model in MODELS:
-            endpoint = MODELS[i2v_model]
-
-    # Build arguments
     args: dict = {
         "prompt": prompt,
         "duration": str(duration),
@@ -140,7 +118,6 @@ def generate_video(
     if seed is not None:
         args["seed"] = seed
 
-    # Model-specific params
     if "kling" in endpoint:
         if generate_audio:
             args["generate_audio"] = True
@@ -155,7 +132,6 @@ def generate_video(
         if image_path:
             args["image_url"] = _upload_image(image_path)
 
-    # Submit and wait
     cb = progress_callback or _progress_callback
     result = fal_client.subscribe(
         endpoint,
@@ -167,13 +143,11 @@ def generate_video(
     video_url = result["video"]["url"]
     result_seed = result.get("seed")
 
-    # Estimate cost
-    cost_per_sec = MODEL_COST_PER_SEC.get(model, 0.10)
-    estimated_cost = cost_per_sec * duration
-    if generate_audio and "kling" in model:
-        estimated_cost *= 1.5  # Audio adds ~50%
+    cost = _cost_per_sec(model) or _cost_per_sec(endpoint) or 0.10
+    estimated_cost = cost * duration
+    if generate_audio and "kling" in endpoint:
+        estimated_cost *= 1.5
 
-    # Download if path provided
     local = None
     if output_path is not None:
         output_path = Path(output_path)
@@ -195,13 +169,9 @@ def _upload_image(path: str | Path) -> str:
     """Upload a local image to fal.ai CDN."""
     path = Path(path)
     if str(path).startswith(("http://", "https://")):
-        return str(path)  # Already a URL
+        return str(path)
     return fal_client.upload_file(str(path))
 
-
-# ---------------------------------------------------------------------------
-# Batch generation
-# ---------------------------------------------------------------------------
 
 def generate_batch(
     specs: list[dict],
@@ -232,10 +202,6 @@ def generate_batch(
     return results
 
 
-# ---------------------------------------------------------------------------
-# Cost estimation
-# ---------------------------------------------------------------------------
-
 def estimate_cost(
     model: str = "kling-3",
     duration: int = 5,
@@ -246,8 +212,8 @@ def estimate_cost(
 
     Returns dict with per-clip and total cost.
     """
-    cost_per_sec = MODEL_COST_PER_SEC.get(model, 0.10)
-    per_clip = cost_per_sec * duration
+    cost = _cost_per_sec(model) or 0.10
+    per_clip = cost * duration
     if audio and "kling" in model:
         per_clip *= 1.5
     return {
@@ -260,12 +226,55 @@ def estimate_cost(
     }
 
 
+def generate_ad_clip(
+    prompt: str,
+    *,
+    format_name: str,
+    output_dir: str,
+    seed: int | None = None,
+    model: str = "kling-2.6",
+    duration: int = 5,
+) -> VideoResult:
+    """Generate one fal.ai clip sized for the given video ad format.
+
+    Mirrors ``image_gen.generate_image``: returns a raw clip path. Overlay
+    burn-in and loudness normalization happen downstream in
+    ``render.render_video_ad``.
+    """
+    from adclip.formats import get_format
+
+    fmt = get_format(format_name)
+    if fmt.kind != "video":
+        raise ValueError(f"format {format_name!r} is not a video format")
+
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    fname = f"{format_name}_{seed or 'x'}_raw.mp4"
+    local = str(Path(output_dir) / fname)
+
+    result = generate_video(
+        prompt=prompt,
+        model=model,
+        duration=duration,
+        aspect_ratio=fmt.aspect,
+        output_path=local,
+        seed=seed,
+    )
+
+    return VideoResult(
+        local_path=result.local_path or local,
+        url=result.video_url,
+        model=result.model,
+        cost_usd=result.estimated_cost,
+        duration=float(result.duration),
+    )
+
+
 def list_models() -> dict[str, dict]:
-    """List available models with pricing info."""
+    """List available aliased models with pricing info."""
     result = {}
     for name, endpoint in MODELS.items():
-        is_i2v = name.endswith("-i2v")
-        cost = MODEL_COST_PER_SEC.get(name.replace("-i2v", ""), 0.10)
+        is_i2v = "image-to-video" in endpoint
+        cost = _cost_per_sec(name) or 0.10
         result[name] = {
             "endpoint": endpoint,
             "type": "image-to-video" if is_i2v else "text-to-video",
