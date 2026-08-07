@@ -1,72 +1,33 @@
 """MCP tools: copy generation pipeline + standalone policy check.
 
-Default provider is the claude CLI subprocess — Claude Code's MCP client
-does not implement MCP sampling today, so "default" routes to
-ClaudeCliProvider for reliability. Pass provider="sampling" explicitly if
-running under a client that supports sampling.
+MCP is an interface adapter over :class:`adclip.application.AdclipApplication`.
+Provider selection and copy workflow behavior are shared with the CLI and future
+HTTP/UI interfaces.
 """
 
 from __future__ import annotations
 
 import json
 
-from pydantic import ValidationError
-
 from mcp.server.fastmcp import Context
 
-from adclip.copy import generate_copy_pool
+from adclip.application import AdclipApplication
 from adclip.formats import get_format
-from adclip.llm import (
-    FakeLLMProvider,
-    LLMProvider,
-    SamplingLLMProvider,
-)
+from adclip.llm import LLMProvider
 from adclip.policy import check_copy
 from adclip.schema import AdBrief
-from adclip.scoring import rank_pool
 
 
 def _get_provider(name: str, *, session=None) -> LLMProvider:
-    if name == "fake":
-        return FakeLLMProvider()
-    if name == "default" or name == "claude-cli":
-        from adclip.claude_cli import ClaudeCliProvider
-        return ClaudeCliProvider()
-    if name == "sampling":
-        if session is None:
-            raise RuntimeError(
-                "sampling provider requires an MCP session. Use provider="
-                "'claude-cli' (the default) if no sampling-capable client "
-                "is connected."
-            )
-        return SamplingLLMProvider(session)
-    if name == "anthropic":
-        from adclip.llm import AnthropicProvider
-        return AnthropicProvider()
-    raise ValueError(f"Unknown provider: {name}")
+    """Compatibility wrapper around the application provider registry."""
+
+    return AdclipApplication().resolve_llm_provider(name, session=session)
 
 
 def _filter_pool(pool: list[dict], brief: AdBrief) -> tuple[list[dict], list[dict]]:
-    """Split pool into (survivors, rejected) via policy checks."""
-    survivors: list[dict] = []
-    rejected: list[dict] = []
-    for cand in pool:
-        fmt = get_format(cand["format"])
-        report = check_copy(
-            headline=cand["headline"],
-            body=cand["body"],
-            cta=cand["cta"],
-            format_spec=fmt,
-            profile=brief.policy_profile,
-            must_include=brief.must_include,
-            must_avoid=brief.must_avoid,
-        )
-        cand_out = {**cand, "warnings": report.warnings}
-        if report.violations:
-            rejected.append({**cand_out, "violations": report.violations})
-        else:
-            survivors.append(cand_out)
-    return survivors, rejected
+    """Compatibility wrapper for the transport-neutral copy policy pass."""
+
+    return AdclipApplication.filter_copy_pool(pool, brief)
 
 
 async def _generate_copy_impl(
@@ -75,25 +36,11 @@ async def _generate_copy_impl(
     *,
     session=None,
 ) -> dict:
-    try:
-        brief = AdBrief(**json.loads(brief_json))
-    except (ValidationError, ValueError, json.JSONDecodeError) as e:
-        return {"ok": False, "error": str(e)}
-
-    try:
-        provider = _get_provider(provider_name, session=session)
-    except RuntimeError as e:
-        return {"ok": False, "error": str(e)}
-
-    pool = await generate_copy_pool(brief, provider=provider)
-    survivors, rejected = _filter_pool(pool, brief)
-    winners = rank_pool(survivors, n=brief.variants)
-    return {
-        "ok": True,
-        "winners": winners,
-        "rejected": rejected,
-        "pool": pool,
-    }
+    return await AdclipApplication().generate_copy_json(
+        brief_json,
+        provider_name=provider_name,
+        session=session,
+    )
 
 
 def _policy_check_impl(
@@ -117,9 +64,13 @@ def _policy_check_impl(
         return {"ok": False, "error": f"Bad JSON array: {e}"}
 
     report = check_copy(
-        headline=headline, body=body, cta=cta,
-        format_spec=fmt, profile=profile,  # type: ignore[arg-type]
-        must_include=must_include, must_avoid=must_avoid,
+        headline=headline,
+        body=body,
+        cta=cta,
+        format_spec=fmt,
+        profile=profile,  # type: ignore[arg-type]
+        must_include=must_include,
+        must_avoid=must_avoid,
     )
     return {
         "ok": True,
@@ -139,13 +90,14 @@ def register(mcp) -> None:
             brief_json: JSON-encoded AdBrief.
             provider: 'default'/'claude-cli' (shells out to claude CLI —
                 no key, works under any MCP client), 'sampling' (asks
-                Claude via MCP sampling — only works under clients that
-                implement it), 'anthropic' (direct API key), or 'fake'
-                (tests).
+                the connected host via MCP sampling), 'anthropic' (direct
+                paid API), or 'fake' (tests).
         """
         session = ctx.request_context.session
         result = await _generate_copy_impl(
-            brief_json, provider_name=provider, session=session
+            brief_json,
+            provider_name=provider,
+            session=session,
         )
         return json.dumps(result)
 
@@ -160,9 +112,14 @@ def register(mcp) -> None:
         must_avoid_json: str = "[]",
     ) -> str:
         """Dry-run policy check against copy without generating anything."""
-        return json.dumps(_policy_check_impl(
-            headline=headline, body=body, cta=cta,
-            format_name=format_name, profile=profile,
-            must_include_json=must_include_json,
-            must_avoid_json=must_avoid_json,
-        ))
+        return json.dumps(
+            _policy_check_impl(
+                headline=headline,
+                body=body,
+                cta=cta,
+                format_name=format_name,
+                profile=profile,
+                must_include_json=must_include_json,
+                must_avoid_json=must_avoid_json,
+            )
+        )

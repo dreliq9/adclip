@@ -1,12 +1,8 @@
-"""adclip CLI — thin wrapper over the MCP tool implementations.
+"""adclip CLI — standalone adapter over the shared application services.
 
-The CLI can't use MCP sampling (no connected client), so it defaults to
-'claude-cli' (subscription auth, no API key). Pass --llm anthropic to opt
-into the direct API, or --llm fake in tests.
-
-Live third-party APIs (anthropic, fal.ai) additionally require
-ADCLIP_ALLOW_LIVE_APIS=1 to be set — this prevents surprise billing if a
-key happens to be in the environment.
+The CLI does not depend on the MCP implementation. It defaults to the Claude
+CLI provider (subscription auth, no API key); direct paid APIs remain opt-in
+through ``ADCLIP_ALLOW_LIVE_APIS=1``.
 """
 
 from __future__ import annotations
@@ -21,10 +17,7 @@ from adclip import _env
 
 _env.load()
 
-from adclip.formats import FORMATS
-from adclip.mcp.brief_tools import _estimate_cost_impl
-from adclip.mcp.copy_tools import _generate_copy_impl
-from adclip.mcp.pipeline_tools import _generate_variants_impl
+from adclip.application import AdclipApplication
 
 
 @click.group()
@@ -33,12 +26,19 @@ def main() -> None:
 
 
 @main.command()
+def status() -> None:
+    """Show runtime mode and registered provider capabilities."""
+    click.echo(json.dumps(AdclipApplication().status(), indent=2))
+
+
+@main.command()
 def formats() -> None:
     """List supported ad formats and their specs."""
-    for name, spec in FORMATS.items():
+    for spec in AdclipApplication.list_formats()["formats"]:
         click.echo(
-            f"{name}  {spec.aspect:7s}  {spec.width}x{spec.height}  "
-            f"kind={spec.kind}  headline<={spec.headline_max}  body<={spec.body_max}"
+            f"{spec['name']}  {spec['aspect']:7s}  "
+            f"{spec['width']}x{spec['height']}  kind={spec['kind']}  "
+            f"headline<={spec['headline_max']}  body<={spec['body_max']}"
         )
 
 
@@ -46,7 +46,7 @@ def formats() -> None:
 @click.argument("brief_path", type=click.Path(exists=True))
 def estimate_cmd(brief_path: str) -> None:
     """Estimate cost for a brief JSON file."""
-    out = _estimate_cost_impl(Path(brief_path).read_text())
+    out = AdclipApplication().estimate_cost_json(Path(brief_path).read_text())
     click.echo(json.dumps(out, indent=2))
 
 
@@ -57,16 +57,18 @@ def estimate_cmd(brief_path: str) -> None:
     default="claude-cli",
     type=click.Choice(["claude-cli", "anthropic", "fake"]),
     help=(
-        "LLM provider. 'claude-cli' (default) shells out to the claude CLI "
-        "using subscription auth (no API key). 'anthropic' uses the direct "
-        "API and requires ANTHROPIC_API_KEY. 'fake' is for tests."
+        "LLM provider. 'claude-cli' (default) uses subscription auth; "
+        "'anthropic' uses the paid direct API; 'fake' is for tests."
     ),
 )
 def copy_cmd(brief_path: str, provider: str) -> None:
     """Generate ad copy (no images/video)."""
-    out = asyncio.run(_generate_copy_impl(
-        Path(brief_path).read_text(), provider_name=provider
-    ))
+    out = asyncio.run(
+        AdclipApplication().generate_copy_json(
+            Path(brief_path).read_text(),
+            provider_name=provider,
+        )
+    )
     click.echo(json.dumps(out, indent=2))
 
 
@@ -77,19 +79,20 @@ def copy_cmd(brief_path: str, provider: str) -> None:
     default="claude-cli",
     type=click.Choice(["claude-cli", "anthropic", "fake"]),
     help=(
-        "LLM provider. 'claude-cli' (default) shells out to the claude CLI "
-        "using subscription auth. 'anthropic' uses the direct API and "
-        "requires ANTHROPIC_API_KEY. 'fake' is for tests."
+        "LLM provider. 'claude-cli' (default) uses subscription auth; "
+        "'anthropic' uses the paid direct API; 'fake' is for tests."
     ),
 )
 @click.option("--image", default="default", type=click.Choice(["default", "fake"]))
 @click.option("--video", default="default", type=click.Choice(["default", "fake"]))
 def run_cmd(brief_path: str, llm: str, image: str, video: str) -> None:
     """Run the full pipeline for a brief JSON file."""
-    out = asyncio.run(_generate_variants_impl(
-        Path(brief_path).read_text(),
-        llm_provider=llm,
-        image_provider=image,
-        video_provider=video,
-    ))
+    out = asyncio.run(
+        AdclipApplication().generate_variants_json(
+            Path(brief_path).read_text(),
+            llm_provider_name=llm,
+            image_provider_name=image,
+            video_provider_name=video,
+        )
+    )
     click.echo(json.dumps(out, indent=2))
