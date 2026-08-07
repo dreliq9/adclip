@@ -6,17 +6,17 @@
 ## Purpose
 
 A provider is infrastructure. A model is an implementation. A route is an
-adclip policy for a marketing task.
+adclip policy for a durable marketing task.
 
 ```text
 creative requirement -> route -> primary target + ordered fallbacks
 ```
 
-Routes allow defaults to improve over time without changing campaign schemas or
-embedding model names throughout the application. Explicit provider/model
-selection always remains available.
+Routes allow defaults to improve without changing campaign schemas or embedding
+model names throughout the application. Explicit provider/model selection
+always remains available.
 
-## Current image routes
+## Image routes
 
 | Route | Primary | Ordered fallbacks | Notes |
 | --- | --- | --- | --- |
@@ -26,17 +26,17 @@ selection always remains available.
 | `bulk` | fal / FLUX.2 Pro | Nano Banana 2 Lite, FLUX.2 | High-volume production |
 | `draft` | fal / Nano Banana 2 Lite | FLUX.2 | Fast concept exploration |
 | `brand-control` | fal / FLUX.2 Flex | GPT Image 2 high, FLUX.2 Pro | Palette and controlled layout |
-| `reference` | Nano Banana 2 | GPT Image 2 edit | Cataloged; requires reference-image contract |
+| `reference` | Nano Banana 2 | GPT Image 2 | Cataloged; requires reference-image contract |
 | `vector` | Recraft V4.1 Vector | — | Cataloged; requires Recraft/vector adapter |
 
-## Current video routes
+## Video routes
 
 | Route | Primary | Ordered fallbacks | Notes |
 | --- | --- | --- | --- |
-| `general` | fal / Kling O3 Standard | Kling 3 Standard, Wan 2.6 | Default social/performance route |
+| `general` | fal / Kling O3 Standard | Kling 3 Standard, Wan 2.7 | Default social/performance route |
 | `premium` | fal / Veo 3.1 | Kling O3 with audio | Cinematic and native-audio output |
 | `multi-shot` | fal / Seedance 2 Fast | Kling O3 intelligent shots | Directed sequences |
-| `budget` | fal / Wan 2.6 | Kling O3 | Cost-controlled exploration |
+| `budget` | fal / Wan 2.7 | Kling O3, legacy Wan 2.6 | Flexible-duration, cost-controlled exploration |
 | `multi-reference` | Seedance 2 Reference | — | Cataloged; requires reference-media contract |
 | `image-animation` | Kling O3 image-to-video | — | Cataloged; requires start-image input |
 | `edit` | Runway Aleph 2 | — | Cataloged; requires source-video and adapter |
@@ -62,37 +62,40 @@ The built-in recommender is deterministic and inspectable:
 - high-volume/draft video -> `budget`
 - otherwise -> `general`
 
-It is not an LLM judgment and does not infer requirements that were not supplied.
+It is not an LLM judgment and does not infer requirements that were not
+supplied.
 
-## Overrides
+## Selection and overrides
 
-Selection precedence:
+Route selection precedence:
 
 1. explicit route;
 2. `ADCLIP_IMAGE_ROUTE` / `ADCLIP_VIDEO_ROUTE`;
 3. `general`.
 
-Within a route:
+Within a route, provider precedence is:
 
 1. explicit provider;
 2. modality provider environment variable;
 3. route primary provider.
 
-Then:
+Model precedence is:
 
 1. explicit model;
 2. modality model environment variable;
-3. matching route target model;
+3. matching route-target model;
 4. route primary model.
 
-Explicit provider/model values are recorded with the selected route in
-provenance.
+When an explicit model comes from another family, adclip does not inherit
+options validated only for the original route model. For example, overriding a
+Kling route with Veo must not accidentally carry Kling-specific shot settings.
+The explicit selection and the route are both recorded in provenance.
 
 ## Fallbacks
 
 Fallbacks are recommendations, not automatic retries. Automatically spending on
-another model after a failed call would make billing and reproducibility
-ambiguous. A future authorized retry policy must define:
+another model after failure would make billing and reproducibility ambiguous.
+A future authorized retry policy must define:
 
 ```text
 maximum additional cost
@@ -106,8 +109,8 @@ Until then, the caller chooses the next target explicitly.
 
 ## Bake-off governance
 
-Defaults should be revisited regularly with the fixed media bake-off suite.
-Run plans without spending:
+Defaults should be revisited with the fixed media bake-off suite. Plans make no
+provider calls:
 
 ```bash
 adclip bakeoff --modality image --routes general,text-heavy,bulk
@@ -119,9 +122,24 @@ suite records latency, cost, artifact hashes, failure status, and evaluation
 dimensions. Human scores should be added without removing raw artifacts or
 provider metadata.
 
-Promote a new default only when it wins on the task-specific dimensions at an
+Promote a new default only when it wins on task-specific dimensions at an
 acceptable cost and failure rate. Keep prior results so route changes are
 traceable over time.
+
+## Route maintenance
+
+Model catalogs move faster than durable marketing tasks. A route update should:
+
+- verify the provider endpoint and current input schema;
+- update the adapter and mocked tests before changing the primary;
+- compare against the previous primary through the bake-off;
+- preserve the prior model as a compatibility alias or fallback when useful;
+- update route/provider/model provenance documentation;
+- never claim a route is production-ready without end-to-end validation.
+
+Wan 2.7 is the current budget-route primary. Wan 2.6 remains available as a
+legacy fallback because existing briefs and explicit model selections may still
+reference it.
 
 ## Adding a route
 
@@ -130,10 +148,10 @@ A new route should include:
 - a stable task-oriented name;
 - one primary target;
 - zero or more ordered fallbacks;
-- generation options that are valid for the selected model family;
+- generation options valid for the selected model family;
 - explicit required inputs/adapters;
 - `production_ready=False` until end-to-end execution is tested;
-- bake-off fixtures or evidence that distinguish the task from existing routes.
+- bake-off fixtures or evidence distinguishing it from existing routes.
 
 Do not add routes merely to mirror every model in a provider catalog. Routes
-represent durable marketing tasks, while model catalogs change frequently.
+represent durable marketing tasks; models are replaceable implementations.
