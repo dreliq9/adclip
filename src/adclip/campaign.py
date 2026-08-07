@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 from datetime import datetime, timezone
@@ -23,6 +24,22 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
     temporary = path.with_name(f".{path.name}.tmp")
     temporary.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     temporary.replace(path)
+
+
+def _artifact_sha256(root: Path, relative_path: object) -> str | None:
+    if not isinstance(relative_path, str) or not relative_path:
+        return None
+    root_resolved = root.resolve()
+    artifact = (root / relative_path).resolve()
+    if not artifact.is_relative_to(root_resolved):
+        raise ValueError(f"Manifest artifact path escapes campaign directory: {relative_path!r}")
+    if not artifact.is_file():
+        return None
+    digest = hashlib.sha256()
+    with artifact.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def ensure_campaign_state(
@@ -60,25 +77,40 @@ def ensure_campaign_state(
     return state
 
 
-def creative_id_for(campaign_id: str, variant_id: str, format_name: str) -> str:
-    """Return a deterministic creative ID for one campaign variant artifact."""
+def creative_id_for(
+    campaign_id: str,
+    variant_id: str,
+    format_name: str,
+    *,
+    artifact_sha256: str | None = None,
+) -> str:
+    """Return a deterministic ID for an exact creative artifact when possible."""
 
+    material = artifact_sha256 or "unhashed-artifact"
     identity = uuid.uuid5(
         uuid.NAMESPACE_URL,
-        f"adclip:{campaign_id}:creative:{variant_id}:{format_name}",
+        f"adclip:{campaign_id}:creative:{variant_id}:{format_name}:{material}",
     )
     return f"crv_{identity.hex}"
 
 
-def _entry_with_identity(campaign_id: str, entry: dict) -> dict:
+def _entry_with_identity(campaign_id: str, entry: dict, root: Path) -> dict:
     output = dict(entry)
     variant_id = output.get("variant_id")
     format_name = output.get("format")
-    if (
-        not output.get("creative_id")
-        and isinstance(variant_id, str)
-        and isinstance(format_name, str)
-    ):
+    if not isinstance(variant_id, str) or not isinstance(format_name, str):
+        return output
+
+    artifact_hash = _artifact_sha256(root, output.get("path"))
+    if artifact_hash is not None:
+        output["artifact_sha256"] = artifact_hash
+        output["creative_id"] = creative_id_for(
+            campaign_id,
+            variant_id,
+            format_name,
+            artifact_sha256=artifact_hash,
+        )
+    elif not output.get("creative_id"):
         output["creative_id"] = creative_id_for(
             campaign_id,
             variant_id,
@@ -107,7 +139,7 @@ def variant_dir(brief: AdBrief, variant_id: str) -> Path:
 
 
 def ensure_manifest_identity(campaign_dir: str | Path) -> dict:
-    """Load a manifest and backfill stable campaign/creative IDs if absent."""
+    """Load a manifest and reconcile stable campaign/creative IDs and hashes."""
 
     root = Path(campaign_dir)
     path = root / "manifest.json"
@@ -139,7 +171,7 @@ def ensure_manifest_identity(campaign_dir: str | Path) -> dict:
     entries = manifest.get("entries", [])
     if not isinstance(entries, list):
         raise ValueError("manifest entries must be a list")
-    identified = [_entry_with_identity(campaign_id, entry) for entry in entries]
+    identified = [_entry_with_identity(campaign_id, entry, root) for entry in entries]
     if identified != entries:
         manifest["entries"] = identified
         changed = True
@@ -171,7 +203,10 @@ def write_manifest(
             "pool_size": brief.pool_size,
         },
         "total_cost_usd": cost_usd,
-        "entries": [_entry_with_identity(campaign_id, entry) for entry in entries],
+        "entries": [
+            _entry_with_identity(campaign_id, entry, root)
+            for entry in entries
+        ],
     }
     if models:
         manifest["models"] = models
