@@ -13,7 +13,7 @@ class CaptureMCP:
         return decorator
 
 
-def test_performance_mcp_registers_read_and_lineage_tools():
+def test_performance_mcp_registers_learning_tools():
     mcp = CaptureMCP()
     register(mcp)
     assert {
@@ -22,4 +22,8 @@ def test_performance_mcp_registers_read_and_lineage_tools():
         "adclip_performance_sync_meta",
         "adclip_performance_report",
         "adclip_performance_compare",
+        "adclip_experiment_create",
+        "adclip_experiments",
+        "adclip_experiment_evaluate",
+        "adclip_experiment_next_test",
     } <= set(mcp.tools)
