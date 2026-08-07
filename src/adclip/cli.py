@@ -12,7 +12,7 @@ from adclip import _env
 
 _env.load()
 
-from adclip.application import AdclipApplication
+from adclip.application import AdclipApplication, EmailCampaignApplication
 from adclip.model_routing import IMAGE_ROUTES, VIDEO_ROUTES
 from adclip.providers.registry import default_text_registry
 
@@ -28,7 +28,7 @@ _VIDEO_ROUTE_TYPE = click.Choice(["default", *sorted(VIDEO_ROUTES)])
 
 @click.group()
 def main() -> None:
-    """adclip — model-agnostic ad creative generation."""
+    """adclip — model-agnostic marketing creative generation."""
 
 
 @main.command()
@@ -251,4 +251,126 @@ def bakeoff_cmd(
         result = run_bakeoff(jobs, output_dir=output_dir, execute=execute)
     except (RuntimeError, ValueError) as exc:
         result = {"ok": False, "error": str(exc)}
+    click.echo(json.dumps(result, indent=2))
+
+
+@main.group("email")
+def email_group() -> None:
+    """Create, edit, validate, and export email campaign packages."""
+
+
+@email_group.command("brief-validate")
+@click.argument("brief_path", type=click.Path(exists=True, dir_okay=False))
+def email_brief_validate_cmd(brief_path: str) -> None:
+    """Validate an EmailCampaignBrief JSON file."""
+    result = EmailCampaignApplication.validate_brief_json(
+        Path(brief_path).read_text(encoding="utf-8")
+    )
+    click.echo(json.dumps(result, indent=2))
+
+
+@email_group.command("scaffold")
+@click.argument("brief_path", type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--delivery-plan",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Optional provider-neutral delivery plan JSON.",
+)
+def email_scaffold_cmd(brief_path: str, delivery_plan: str | None) -> None:
+    """Render supplied copy without invoking a model."""
+    result = EmailCampaignApplication().scaffold_email_json(
+        Path(brief_path).read_text(encoding="utf-8"),
+        delivery_plan_json=(
+            Path(delivery_plan).read_text(encoding="utf-8") if delivery_plan else None
+        ),
+    )
+    click.echo(json.dumps(result, indent=2))
+
+
+@email_group.command("generate")
+@click.argument("brief_path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--provider", default="default", type=_TEXT_PROVIDER_TYPE, show_default=True)
+@click.option("--model", default=None)
+@click.option(
+    "--delivery-plan",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+)
+def email_generate_cmd(
+    brief_path: str,
+    provider: str,
+    model: str | None,
+    delivery_plan: str | None,
+) -> None:
+    """Generate email copy through a selected text model and package variants."""
+    result = asyncio.run(
+        EmailCampaignApplication().generate_email_json(
+            Path(brief_path).read_text(encoding="utf-8"),
+            provider_name=provider,
+            model_name=model,
+            delivery_plan_json=(
+                Path(delivery_plan).read_text(encoding="utf-8")
+                if delivery_plan
+                else None
+            ),
+        )
+    )
+    click.echo(json.dumps(result, indent=2))
+
+
+@email_group.command("edit")
+@click.argument("campaign_dir", type=click.Path(exists=True, file_okay=False))
+@click.argument("patch_path", type=click.Path(exists=True, dir_okay=False))
+@click.option("--variant", "variant_id", default="v01", show_default=True)
+def email_edit_cmd(campaign_dir: str, patch_path: str, variant_id: str) -> None:
+    """Apply a structured patch and regenerate HTML, text, headers, and EML."""
+    result = EmailCampaignApplication.edit_email_json(
+        campaign_dir,
+        variant_id,
+        Path(patch_path).read_text(encoding="utf-8"),
+    )
+    click.echo(json.dumps(result, indent=2))
+
+
+@email_group.command("validate")
+@click.argument("campaign_dir", type=click.Path(exists=True, file_okay=False))
+@click.option("--variant", "variant_id", default="v01", show_default=True)
+def email_validate_cmd(campaign_dir: str, variant_id: str) -> None:
+    """Validate one packaged email variant."""
+    result = EmailCampaignApplication.validate_variant(campaign_dir, variant_id)
+    click.echo(json.dumps(result, indent=2))
+
+
+@email_group.command("validate-html")
+@click.argument("html_path", type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--message-type",
+    type=click.Choice(["marketing", "transactional"]),
+    default="marketing",
+    show_default=True,
+)
+@click.option("--physical-address", default=None)
+@click.option("--unsubscribe-url", default=None)
+def email_validate_html_cmd(
+    html_path: str,
+    message_type: str,
+    physical_address: str | None,
+    unsubscribe_url: str | None,
+) -> None:
+    """Audit arbitrary email HTML without importing it into a campaign package."""
+    result = EmailCampaignApplication.validate_html_json(
+        Path(html_path).read_text(encoding="utf-8"),
+        message_type=message_type,
+        physical_address=physical_address,
+        unsubscribe_url=unsubscribe_url,
+    )
+    click.echo(json.dumps(result, indent=2))
+
+
+@email_group.command("status")
+@click.argument("campaign_dir", type=click.Path(exists=True, file_okay=False))
+def email_status_cmd(campaign_dir: str) -> None:
+    """Show the email campaign manifest and variant validation state."""
+    result = EmailCampaignApplication.campaign_status(campaign_dir)
     click.echo(json.dumps(result, indent=2))
