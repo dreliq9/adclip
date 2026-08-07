@@ -1,17 +1,46 @@
-"""Small media-provider adapters shared by CLI, MCP, and application tests.
+"""Model-bound image and video provider adapters.
 
-The production ``default`` path remains in ``adclip.pipeline`` for now. These
-helpers remove test-provider code from the MCP adapter and establish a neutral
-home for future image/video provider registries.
+Provider selection and model selection are separate. The current production
+adapter is fal.ai, but application and interface code only receive a callable
+binding carrying neutral provider/model metadata.
 """
 
 from __future__ import annotations
 
+import os
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from adclip.runtime import ProviderRequirements, RuntimePolicy
+
 
 MediaProviderFn = Callable[..., object]
+
+
+@dataclass(frozen=True)
+class MediaProviderBinding:
+    """Callable media adapter plus the selected provider/model identity."""
+
+    media_kind: str
+    provider_name: str
+    model_name: str | None
+    invoke: MediaProviderFn
+
+    def __call__(self, prompt, *, format_name, output_dir, seed):
+        return self.invoke(
+            prompt,
+            format_name=format_name,
+            output_dir=output_dir,
+            seed=seed,
+        )
+
+    def as_dict(self) -> dict[str, str | None]:
+        return {
+            "provider": self.provider_name,
+            "model": self.model_name,
+        }
 
 
 def fake_image_provider(prompt, *, format_name, output_dir, seed):
@@ -28,7 +57,7 @@ def fake_image_provider(prompt, *, format_name, output_dir, seed):
     class Result:
         local_path = str(path)
         url = ""
-        model = "flux-fake"
+        model = "fake-image-v1"
         cost_usd = 0.0
 
     return Result()
@@ -36,8 +65,6 @@ def fake_image_provider(prompt, *, format_name, output_dir, seed):
 
 def fake_video_provider(prompt, *, format_name, output_dir, seed):
     """Synthesize a one-second test MP4 via FFmpeg lavfi."""
-
-    import subprocess
 
     from adclip.formats import get_format
 
@@ -65,24 +92,121 @@ def fake_video_provider(prompt, *, format_name, output_dir, seed):
     class Result:
         local_path = str(path)
         url = ""
-        model = "kling-fake"
+        model = "fake-video-v1"
         cost_usd = 0.0
         duration = 1.0
 
     return Result()
 
 
-def resolve_image_provider(name: str) -> MediaProviderFn | None:
-    if name == "default":
-        return None
-    if name == "fake":
-        return fake_image_provider
-    raise ValueError(f"Unknown image provider: {name!r}")
+def _configured_provider(requested: str, env_name: str, fallback: str) -> str:
+    if requested == "default":
+        return os.environ.get(env_name, fallback)
+    return requested
 
 
-def resolve_video_provider(name: str) -> MediaProviderFn | None:
-    if name == "default":
-        return None
-    if name == "fake":
-        return fake_video_provider
-    raise ValueError(f"Unknown video provider: {name!r}")
+def resolve_image_provider(
+    name: str = "default",
+    *,
+    model: str | None = None,
+    policy: RuntimePolicy | None = None,
+) -> MediaProviderBinding:
+    active_policy = policy or RuntimePolicy.from_env()
+    canonical = _configured_provider(name, "ADCLIP_IMAGE_PROVIDER", "fal")
+    if canonical == "fake":
+        return MediaProviderBinding(
+            media_kind="image",
+            provider_name="fake",
+            model_name=model or "fake-image-v1",
+            invoke=fake_image_provider,
+        )
+    if canonical == "fal":
+        selected_model = model or os.environ.get("ADCLIP_IMAGE_MODEL") or "flux-dev"
+
+        def _invoke(prompt, *, format_name, output_dir, seed):
+            active_policy.check_provider(
+                "fal-image",
+                ProviderRequirements(network=True, paid_api=True),
+            )
+            from adclip.image_gen import generate_image
+
+            return generate_image(
+                prompt,
+                format_name=format_name,
+                output_dir=output_dir,
+                seed=seed,
+                model=selected_model,
+            )
+
+        return MediaProviderBinding(
+            media_kind="image",
+            provider_name="fal",
+            model_name=selected_model,
+            invoke=_invoke,
+        )
+    raise ValueError(
+        f"Unknown image provider: {name!r}. Known providers: default, fal, fake"
+    )
+
+
+def resolve_video_provider(
+    name: str = "default",
+    *,
+    model: str | None = None,
+    policy: RuntimePolicy | None = None,
+) -> MediaProviderBinding:
+    active_policy = policy or RuntimePolicy.from_env()
+    canonical = _configured_provider(name, "ADCLIP_VIDEO_PROVIDER", "fal")
+    if canonical == "fake":
+        return MediaProviderBinding(
+            media_kind="video",
+            provider_name="fake",
+            model_name=model or "fake-video-v1",
+            invoke=fake_video_provider,
+        )
+    if canonical == "fal":
+        selected_model = model or os.environ.get("ADCLIP_VIDEO_MODEL") or "kling-2.6"
+
+        def _invoke(prompt, *, format_name, output_dir, seed):
+            active_policy.check_provider(
+                "fal-video",
+                ProviderRequirements(network=True, paid_api=True),
+            )
+            from adclip.video_gen import generate_ad_clip
+
+            return generate_ad_clip(
+                prompt,
+                format_name=format_name,
+                output_dir=output_dir,
+                seed=seed,
+                model=selected_model,
+            )
+
+        return MediaProviderBinding(
+            media_kind="video",
+            provider_name="fal",
+            model_name=selected_model,
+            invoke=_invoke,
+        )
+    raise ValueError(
+        f"Unknown video provider: {name!r}. Known providers: default, fal, fake"
+    )
+
+
+def describe_media_configuration() -> dict[str, object]:
+    """Return provider/model defaults without invoking any provider."""
+
+    image = resolve_image_provider("default", policy=RuntimePolicy())
+    video = resolve_video_provider("default", policy=RuntimePolicy())
+    return {
+        "image": {
+            "configured_default": image.as_dict(),
+            "providers": ["fal", "fake"],
+            "model_override": True,
+        },
+        "video": {
+            "configured_default": video.as_dict(),
+            "providers": ["fal", "fake"],
+            "model_override": True,
+        },
+    }

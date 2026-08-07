@@ -1,8 +1,7 @@
 """MCP tools: copy generation pipeline + standalone policy check.
 
 MCP is an interface adapter over :class:`adclip.application.AdclipApplication`.
-Provider selection and copy workflow behavior are shared with the CLI and future
-HTTP/UI interfaces.
+Provider and model selection are forwarded without embedding vendor logic here.
 """
 
 from __future__ import annotations
@@ -13,15 +12,24 @@ from mcp.server.fastmcp import Context
 
 from adclip.application import AdclipApplication
 from adclip.formats import get_format
-from adclip.llm import LLMProvider
+from adclip.providers.contracts import TextGenerationProvider
 from adclip.policy import check_copy
 from adclip.schema import AdBrief
 
 
-def _get_provider(name: str, *, session=None) -> LLMProvider:
+def _get_provider(
+    name: str,
+    *,
+    session=None,
+    model: str | None = None,
+) -> TextGenerationProvider:
     """Compatibility wrapper around the application provider registry."""
 
-    return AdclipApplication().resolve_llm_provider(name, session=session)
+    return AdclipApplication().resolve_text_provider(
+        name,
+        model=model,
+        session=session,
+    )
 
 
 def _filter_pool(pool: list[dict], brief: AdBrief) -> tuple[list[dict], list[dict]]:
@@ -34,11 +42,13 @@ async def _generate_copy_impl(
     brief_json: str,
     provider_name: str = "default",
     *,
+    model_name: str | None = None,
     session=None,
 ) -> dict:
     return await AdclipApplication().generate_copy_json(
         brief_json,
         provider_name=provider_name,
+        model_name=model_name,
         session=session,
     )
 
@@ -82,21 +92,21 @@ def _policy_check_impl(
 def register(mcp) -> None:
     @mcp.tool()
     async def adclip_generate_copy(
-        brief_json: str, ctx: Context, provider: str = "default"
+        brief_json: str,
+        ctx: Context,
+        provider: str = "default",
+        model: str | None = None,
     ) -> str:
-        """Generate copy pool, filter via policy, return top-ranked winners.
+        """Generate, policy-filter, and rank a copy pool.
 
-        Args:
-            brief_json: JSON-encoded AdBrief.
-            provider: 'default'/'claude-cli' (shells out to claude CLI —
-                no key, works under any MCP client), 'sampling' (asks
-                the connected host via MCP sampling), 'anthropic' (direct
-                paid API), or 'fake' (tests).
+        ``provider`` and ``model`` are independent. Built-ins include
+        claude-cli, sampling, anthropic, openai-compatible, and fake.
         """
         session = ctx.request_context.session
         result = await _generate_copy_impl(
             brief_json,
             provider_name=provider,
+            model_name=model,
             session=session,
         )
         return json.dumps(result)

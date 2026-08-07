@@ -1,8 +1,8 @@
-"""Application-service boundary shared by adclip's CLI, MCP, and future UI.
+"""Application-service boundary shared by CLI, MCP, and future UI.
 
-Core workflows live here rather than under any transport adapter. Interfaces
-may accept JSON for compatibility, but the application itself operates on
-``AdBrief`` domain objects and provider capabilities.
+Workflows operate on provider-neutral capabilities and explicit provider/model
+selections. Interface adapters may retain legacy ``llm_*`` parameter names,
+but vendor SDKs and model IDs do not belong in this layer.
 """
 
 from __future__ import annotations
@@ -16,13 +16,21 @@ from pydantic import ValidationError
 from adclip.copy import generate_copy_pool
 from adclip.cost import estimate_cost
 from adclip.formats import FORMATS, get_format
-from adclip.llm import LLMProvider
 from adclip.policy import check_copy
+from adclip.providers.contracts import (
+    ModelSelection,
+    TextGenerationProvider,
+)
 from adclip.providers.media import (
+    describe_media_configuration,
     resolve_image_provider,
     resolve_video_provider,
 )
-from adclip.providers.registry import LLMProviderRegistry, default_llm_registry
+from adclip.providers.registry import (
+    LLMProviderRegistry,
+    TextProviderRegistry,
+    default_text_registry,
+)
 from adclip.runtime import RuntimePolicy
 from adclip.schema import AdBrief
 from adclip.scoring import rank_pool
@@ -34,10 +42,14 @@ class AdclipApplication:
     def __init__(
         self,
         *,
+        text_registry: TextProviderRegistry | None = None,
         llm_registry: LLMProviderRegistry | None = None,
         runtime_policy: RuntimePolicy | None = None,
     ) -> None:
-        self.llm_registry = llm_registry or default_llm_registry()
+        if text_registry is not None and llm_registry is not None:
+            raise ValueError("Pass text_registry or llm_registry, not both")
+        self.text_registry = text_registry or llm_registry or default_text_registry()
+        self.llm_registry = self.text_registry
         self.runtime_policy = runtime_policy or RuntimePolicy.from_env()
 
     @staticmethod
@@ -89,16 +101,47 @@ class AdclipApplication:
         estimate = estimate_cost(brief)
         return {"ok": True, **asdict(estimate)}
 
+    def resolve_text_provider_with_selection(
+        self,
+        name: str = "default",
+        *,
+        model: str | None = None,
+        session: Any | None = None,
+    ) -> tuple[TextGenerationProvider, ModelSelection]:
+        return self.text_registry.resolve_with_selection(
+            name,
+            model=model,
+            session=session,
+            policy=self.runtime_policy,
+        )
+
+    def resolve_text_provider(
+        self,
+        name: str = "default",
+        *,
+        model: str | None = None,
+        session: Any | None = None,
+    ) -> TextGenerationProvider:
+        provider, _selection = self.resolve_text_provider_with_selection(
+            name,
+            model=model,
+            session=session,
+        )
+        return provider
+
     def resolve_llm_provider(
         self,
         name: str = "default",
         *,
+        model: str | None = None,
         session: Any | None = None,
-    ) -> LLMProvider:
-        return self.llm_registry.resolve(
+    ) -> TextGenerationProvider:
+        """Backward-compatible alias for :meth:`resolve_text_provider`."""
+
+        return self.resolve_text_provider(
             name,
+            model=model,
             session=session,
-            policy=self.runtime_policy,
         )
 
     @staticmethod
@@ -106,8 +149,6 @@ class AdclipApplication:
         pool: list[dict],
         brief: AdBrief,
     ) -> tuple[list[dict], list[dict]]:
-        """Split copy candidates into policy survivors and rejected entries."""
-
         survivors: list[dict] = []
         rejected: list[dict] = []
         for candidate in pool:
@@ -133,9 +174,14 @@ class AdclipApplication:
         brief: AdBrief,
         *,
         provider_name: str = "default",
+        model_name: str | None = None,
         session: Any | None = None,
     ) -> dict:
-        provider = self.resolve_llm_provider(provider_name, session=session)
+        provider, selection = self.resolve_text_provider_with_selection(
+            provider_name,
+            model=model_name,
+            session=session,
+        )
         pool = await generate_copy_pool(brief, provider=provider)
         survivors, rejected = self.filter_copy_pool(pool, brief)
         winners = rank_pool(survivors, n=brief.variants)
@@ -144,6 +190,7 @@ class AdclipApplication:
             "winners": winners,
             "rejected": rejected,
             "pool": pool,
+            "models": {"text": selection.as_dict()},
         }
 
     async def generate_copy_json(
@@ -151,6 +198,7 @@ class AdclipApplication:
         brief_json: str,
         *,
         provider_name: str = "default",
+        model_name: str | None = None,
         session: Any | None = None,
     ) -> dict:
         try:
@@ -161,6 +209,7 @@ class AdclipApplication:
             return await self.generate_copy(
                 brief,
                 provider_name=provider_name,
+                model_name=model_name,
                 session=session,
             )
         except (RuntimeError, ValueError) as exc:
@@ -170,30 +219,62 @@ class AdclipApplication:
         self,
         brief: AdBrief,
         *,
-        llm_provider_name: str = "default",
+        text_provider_name: str | None = None,
+        text_model_name: str | None = None,
+        llm_provider_name: str | None = None,
+        llm_model_name: str | None = None,
         image_provider_name: str = "default",
+        image_model_name: str | None = None,
         video_provider_name: str = "default",
+        video_model_name: str | None = None,
         session: Any | None = None,
     ) -> dict:
         from adclip.pipeline import run_pipeline
 
-        llm = self.resolve_llm_provider(llm_provider_name, session=session)
-        image_fn = resolve_image_provider(image_provider_name)
-        video_fn = resolve_video_provider(video_provider_name)
-        return await run_pipeline(
-            brief,
-            llm_provider=llm,
-            image_fn=image_fn,
-            video_fn=video_fn,
+        requested_text_provider = (
+            text_provider_name or llm_provider_name or "default"
         )
+        requested_text_model = text_model_name or llm_model_name
+        text_provider, text_selection = self.resolve_text_provider_with_selection(
+            requested_text_provider,
+            model=requested_text_model,
+            session=session,
+        )
+        image_binding = resolve_image_provider(
+            image_provider_name,
+            model=image_model_name,
+            policy=self.runtime_policy,
+        )
+        video_binding = resolve_video_provider(
+            video_provider_name,
+            model=video_model_name,
+            policy=self.runtime_policy,
+        )
+        result = await run_pipeline(
+            brief,
+            llm_provider=text_provider,
+            image_fn=image_binding,
+            video_fn=video_binding,
+        )
+        result["models"] = {
+            "text": text_selection.as_dict(),
+            "image": image_binding.as_dict(),
+            "video": video_binding.as_dict(),
+        }
+        return result
 
     async def generate_variants_json(
         self,
         brief_json: str,
         *,
-        llm_provider_name: str = "default",
+        text_provider_name: str | None = None,
+        text_model_name: str | None = None,
+        llm_provider_name: str | None = None,
+        llm_model_name: str | None = None,
         image_provider_name: str = "default",
+        image_model_name: str | None = None,
         video_provider_name: str = "default",
+        video_model_name: str | None = None,
         session: Any | None = None,
     ) -> dict:
         try:
@@ -203,19 +284,33 @@ class AdclipApplication:
         try:
             return await self.generate_variants(
                 brief,
+                text_provider_name=text_provider_name,
+                text_model_name=text_model_name,
                 llm_provider_name=llm_provider_name,
+                llm_model_name=llm_model_name,
                 image_provider_name=image_provider_name,
+                image_model_name=image_model_name,
                 video_provider_name=video_provider_name,
+                video_model_name=video_model_name,
                 session=session,
             )
         except (RuntimeError, ValueError) as exc:
             return {"ok": False, "error": str(exc)}
 
     def status(self) -> dict[str, object]:
-        """Return capability metadata for CLI/UI health and diagnostics."""
-
+        text_providers = self.text_registry.describe()
+        media = describe_media_configuration()
         return {
             "runtime": self.runtime_policy.as_dict(),
-            "llm_providers": self.llm_registry.describe(),
+            "configured_models": {
+                "text": self.text_registry.configured_default(),
+                **{
+                    key: value["configured_default"]
+                    for key, value in media.items()
+                },
+            },
+            "text_providers": text_providers,
+            "llm_providers": text_providers,
+            "media_providers": media,
             "format_count": len(FORMATS),
         }

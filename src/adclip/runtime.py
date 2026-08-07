@@ -1,16 +1,17 @@
 """Runtime policy for standalone, connected, and air-gapped operation.
 
-The policy is intentionally small and provider-agnostic. Provider adapters
-publish their requirements; the application checks those requirements before
-instantiating them. This keeps network and paid-API decisions out of MCP/CLI
-wiring and gives future HTTP/UI adapters the same enforcement point.
+Provider adapters declare their operational requirements. The application
+checks those requirements before construction or invocation so CLI, MCP, and
+future HTTP/UI interfaces enforce the same connectivity and billing policy.
 """
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from dataclasses import dataclass, field
 from enum import Enum
+from urllib.parse import urlparse
 
 
 _TRUTHY = {"1", "true", "yes", "on"}
@@ -40,11 +41,37 @@ class RuntimeMode(str, Enum):
 
 @dataclass(frozen=True)
 class ProviderRequirements:
-    """Runtime properties declared by a provider adapter."""
+    """Runtime properties declared by a provider adapter.
+
+    ``loopback_only`` distinguishes a local inference server from external
+    network access. Localhost inference remains usable in offline and
+    air-gapped modes; adapters must re-check dynamically if their endpoint can
+    be configured to a non-loopback host.
+    """
 
     network: bool = False
+    loopback_only: bool = False
     paid_api: bool = False
     host_session: bool = False
+
+    def __post_init__(self) -> None:
+        if self.loopback_only and not self.network:
+            object.__setattr__(self, "network", True)
+
+
+def endpoint_is_loopback(url: str) -> bool:
+    """Return whether an HTTP(S) endpoint resolves syntactically to loopback."""
+
+    parsed = urlparse(url)
+    host = parsed.hostname
+    if not host:
+        return False
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -104,11 +131,11 @@ class RuntimePolicy:
                 f"sessions are disabled in runtime mode {self.mode.value!r}."
             )
 
-        if requirements.network:
+        if requirements.network and not requirements.loopback_only:
             if self.mode in {RuntimeMode.OFFLINE, RuntimeMode.AIR_GAPPED}:
                 raise RuntimeError(
-                    f"Provider {provider_name!r} requires network access, but "
-                    f"adclip is running in {self.mode.value!r} mode."
+                    f"Provider {provider_name!r} requires network access outside "
+                    f"loopback, but adclip is running in {self.mode.value!r} mode."
                 )
             if (
                 self.mode is RuntimeMode.RESTRICTED_NETWORK

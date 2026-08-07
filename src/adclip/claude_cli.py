@@ -1,11 +1,7 @@
-"""Claude CLI subprocess LLM provider.
+"""Claude CLI subprocess text provider.
 
-Shells out to `claude -p` in non-interactive mode using the user's
-existing Claude Code subscription auth. No API key required.
-
-Cost: each generate() call spawns a fresh subprocess (~5-10s startup).
-For latency-sensitive paths use SamplingLLMProvider (in an MCP session)
-or AnthropicProvider (with a key).
+This is a compatibility adapter, not an application-layer dependency. Provider
+and model selection are supplied by the neutral registry.
 """
 
 from __future__ import annotations
@@ -20,7 +16,9 @@ _SYSTEM_PROMPT = (
 
 
 class ClaudeCliProvider:
-    """Async LLMProvider implementation that shells out to `claude -p`."""
+    """Async text provider that shells out to ``claude -p``."""
+
+    provider_name = "claude-cli"
 
     def __init__(
         self,
@@ -29,18 +27,24 @@ class ClaudeCliProvider:
         claude_path: str = "claude",
     ):
         self._model = model
+        self.model_name = model
         self._timeout = timeout
         self._claude = claude_path
 
     async def generate(self, prompt: str, n: int) -> str:
+        del n
         proc = await asyncio.create_subprocess_exec(
             self._claude,
             "-p",
-            "--output-format", "text",
+            "--output-format",
+            "text",
             "--no-session-persistence",
-            "--tools", "",
-            "--model", self._model,
-            "--append-system-prompt", _SYSTEM_PROMPT,
+            "--tools",
+            "",
+            "--model",
+            self._model,
+            "--append-system-prompt",
+            _SYSTEM_PROMPT,
             prompt,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
