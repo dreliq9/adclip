@@ -98,6 +98,8 @@ class ExperimentApplication:
                     control_creative_id=control.creative_id,
                     treatment_creative_id=treatment.creative_id,
                     changed_factor=changed_factor,
+                    control_factor_value=control.factor_value,
+                    treatment_factor_value=treatment.factor_value,
                     primary_metric=primary_metric,
                     action_type=action_type,
                 ),
