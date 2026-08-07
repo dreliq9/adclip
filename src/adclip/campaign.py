@@ -25,8 +25,16 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
     temporary.replace(path)
 
 
-def ensure_campaign_state(root: str | Path) -> dict[str, object]:
-    """Return a stable local campaign identity, creating it once if needed."""
+def ensure_campaign_state(
+    root: str | Path,
+    *,
+    preferred_campaign_id: str | None = None,
+) -> dict[str, object]:
+    """Return a stable campaign identity, creating it once if needed.
+
+    ``preferred_campaign_id`` lets a portable manifest restore the identity when
+    a copied directory is missing its hidden local state file.
+    """
 
     directory = Path(root)
     directory.mkdir(parents=True, exist_ok=True)
@@ -40,9 +48,12 @@ def ensure_campaign_state(root: str | Path) -> dict[str, object]:
             raise ValueError(f"{path} does not contain a valid campaign_id")
         return value
 
+    campaign_id = preferred_campaign_id or f"cmp_{uuid.uuid4().hex}"
+    if not campaign_id.startswith("cmp_"):
+        raise ValueError("campaign_id must use the cmp_ prefix")
     state: dict[str, object] = {
         "schema_version": "campaign-state-v1",
-        "campaign_id": f"cmp_{uuid.uuid4().hex}",
+        "campaign_id": campaign_id,
         "created_at": _utc_now(),
     }
     _atomic_write_json(path, state)
@@ -109,7 +120,13 @@ def ensure_manifest_identity(campaign_dir: str | Path) -> dict:
     if not isinstance(manifest, dict):
         raise ValueError("manifest.json must contain an object")
 
-    state = ensure_campaign_state(root)
+    manifest_campaign_id = manifest.get("campaign_id")
+    preferred = (
+        manifest_campaign_id
+        if isinstance(manifest_campaign_id, str) and manifest_campaign_id.startswith("cmp_")
+        else None
+    )
+    state = ensure_campaign_state(root, preferred_campaign_id=preferred)
     campaign_id = str(state["campaign_id"])
     changed = False
     if manifest.get("campaign_id") != campaign_id:
