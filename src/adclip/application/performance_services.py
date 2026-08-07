@@ -62,9 +62,9 @@ class PerformanceApplication:
         variant_id: str,
         account_id: str,
         ad_id: str,
-        campaign_id: str | None = None,
-        adset_id: str | None = None,
-        creative_id: str | None = None,
+        external_campaign_id: str | None = None,
+        external_adset_id: str | None = None,
+        external_creative_id: str | None = None,
         name: str | None = None,
     ) -> dict[str, object]:
         root = Path(campaign_dir)
@@ -74,6 +74,10 @@ class PerformanceApplication:
             manifest = campaign_manifest(root)
             entry = find_creative_entry(root, variant_id=variant_id)
             account = _meta_account(account_id)
+            metadata = {
+                "artifact_path": entry.get("path"),
+                "artifact_sha256": entry.get("artifact_sha256"),
+            }
             deployment = DeploymentRecord(
                 id=deployment_id_for("meta", account, str(ad_id)),
                 campaign_id=str(manifest["campaign_id"]),
@@ -83,10 +87,17 @@ class PerformanceApplication:
                 platform="meta",
                 account_id=account,
                 external_ad_id=str(ad_id),
-                external_campaign_id=(str(campaign_id) if campaign_id else None),
-                external_adset_id=(str(adset_id) if adset_id else None),
-                external_creative_id=(str(creative_id) if creative_id else None),
+                external_campaign_id=(
+                    str(external_campaign_id) if external_campaign_id else None
+                ),
+                external_adset_id=(
+                    str(external_adset_id) if external_adset_id else None
+                ),
+                external_creative_id=(
+                    str(external_creative_id) if external_creative_id else None
+                ),
                 external_name=name,
+                metadata={key: value for key, value in metadata.items() if value is not None},
             )
             upsert_deployment(root, deployment)
         except (FileNotFoundError, KeyError, ValueError) as exc:
