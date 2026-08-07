@@ -47,14 +47,12 @@ async def _regenerate_copy(
     format_name = existing_copy["format"]
     angle = existing_copy.get("angle", brief.angles[0])
     format_spec = get_format(format_name)
-
     prompt = build_prompt(brief, format_name=format_name, angle=angle)
     raw = await llm_provider.generate(prompt, n=pool_size)
     try:
         candidates = parse_copy_candidates(raw)
     except ValueError as exc:
         return {"ok": False, "error": f"Failed to parse regenerated copy: {exc}"}
-
     candidates = [
         {**candidate, "format": format_name, "angle": angle}
         for candidate in candidates
@@ -73,7 +71,6 @@ async def _regenerate_copy(
         )
         if not report.violations:
             survivors.append({**candidate, "warnings": report.warnings})
-
     if not survivors:
         return {"ok": False, "error": "All regenerated candidates violated policy"}
 
@@ -100,7 +97,6 @@ def _regenerate_visual(
                 f"(got kind={format_spec.kind!r})"
             ),
         }
-
     prompt = build_image_prompt(
         brief,
         format_name=format_name,
@@ -127,12 +123,10 @@ def _recomposite(
 ) -> dict:
     format_name = copy["format"]
     format_spec = get_format(format_name)
-
     if format_spec.kind == "text":
         output = variant_dir / f"{format_name}.json"
         output.write_text(json.dumps(copy, indent=2))
         return {"ok": True, "output_path": str(output.relative_to(root))}
-
     if format_spec.kind != "static":
         return {
             "ok": False,
@@ -148,7 +142,6 @@ def _recomposite(
                 "regenerate with what='visual' or 'both' first."
             ),
         }
-
     plan = build_overlay_plan(
         format_name=format_name,
         copy=copy,
@@ -172,15 +165,12 @@ async def _regenerate_impl(
     root = Path(campaign_dir)
     if not root.is_dir():
         return {"ok": False, "error": f"Campaign dir not found: {campaign_dir}"}
-
     variant_dir = root / "variants" / variant_id
     if not variant_dir.is_dir():
         return {"ok": False, "error": f"Variant not found: {variant_id}"}
-
     brief_path = root / "brief.json"
     if not brief_path.exists():
         return {"ok": False, "error": f"brief.json missing in {campaign_dir}"}
-
     try:
         brief = AdBrief(**json.loads(brief_path.read_text()))
     except (ValidationError, ValueError, json.JSONDecodeError) as exc:
@@ -196,7 +186,6 @@ async def _regenerate_impl(
 
     result: dict = {"ok": True, "variant_id": variant_id, "what": what}
     total_cost = 0.0
-
     if what in ("copy", "both"):
         if llm_provider is None:
             return {
@@ -252,12 +241,13 @@ def register(mcp) -> None:
         what: str = "both",
         llm_provider: str = "default",
         llm_model: str | None = None,
+        image_route: str = "default",
         image_provider: str = "default",
         image_model: str | None = None,
         seed: int | None = None,
         pool_size: int = 3,
     ) -> str:
-        """Redo one variant with independent provider/model selections."""
+        """Redo one variant with independent routed provider/model selections."""
         if what not in ("copy", "visual", "both"):
             return json.dumps({
                 "ok": False,
@@ -267,10 +257,9 @@ def register(mcp) -> None:
             })
 
         application = AdclipApplication()
-        models: dict[str, dict[str, str | None]] = {}
+        models: dict[str, dict[str, object]] = {}
         llm = None
         image_fn = None
-
         try:
             if what in ("copy", "both"):
                 llm, selection = application.resolve_text_provider_with_selection(
@@ -283,17 +272,18 @@ def register(mcp) -> None:
                 image_binding = resolve_image_provider(
                     image_provider,
                     model=image_model,
+                    route=image_route,
                     policy=application.runtime_policy,
                 )
                 image_fn = image_binding
-                models["image"] = image_binding.as_dict()
+                models["image"] = image_binding.provenance()
         except (RuntimeError, ValueError) as exc:
             return json.dumps({"ok": False, "error": str(exc)})
 
         result = await _regenerate_impl(
             campaign_dir,
             variant_id,
-            what=what,
+            what=what,  # type: ignore[arg-type]
             llm_provider=llm,
             image_fn=image_fn,
             seed=seed,

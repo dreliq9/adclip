@@ -102,11 +102,7 @@ def _generate_visuals_impl(
                 logo_path=brief.logo_path,
             )
             output = directory / f"{copy['format']}.png"
-            render_static_ad(
-                plan,
-                background=image.local_path,
-                output=str(output),
-            )
+            render_static_ad(plan, background=image.local_path, output=str(output))
             entries.append({
                 "variant_id": variant_id,
                 "format": copy["format"],
@@ -127,23 +123,14 @@ def _generate_visuals_impl(
             logo_path=brief.logo_path,
         )
         output = directory / f"{copy['format']}.mp4"
-        render_video_ad(
-            plan,
-            background=clip.local_path,
-            output=str(output),
-        )
+        render_video_ad(plan, background=clip.local_path, output=str(output))
         entries.append({
             "variant_id": variant_id,
             "format": copy["format"],
             "path": f"variants/{variant_id}/{copy['format']}.mp4",
         })
 
-    write_manifest(
-        brief,
-        entries=entries,
-        cost_usd=total_cost,
-        models=models,
-    )
+    write_manifest(brief, entries=entries, cost_usd=total_cost, models=models)
     result: dict[str, object] = {
         "ok": True,
         "entries": entries,
@@ -160,16 +147,14 @@ def register(mcp) -> None:
     def adclip_generate_visuals(
         brief_json: str,
         copies_json: str,
+        image_route: str = "default",
         image_provider: str = "default",
         image_model: str | None = None,
+        video_route: str = "default",
         video_provider: str = "default",
         video_model: str | None = None,
     ) -> str:
-        """Produce visuals for existing copy without another text-model call.
-
-        Provider and model are selected independently for image and video.
-        Unused media modalities are not resolved.
-        """
+        """Produce routed visuals for existing copy without a text-model call."""
         try:
             copies = json.loads(copies_json)
         except json.JSONDecodeError:
@@ -191,12 +176,14 @@ def register(mcp) -> None:
                 image_binding = resolve_image_provider(
                     image_provider,
                     model=image_model,
+                    route=image_route,
                     policy=app.runtime_policy,
                 )
             if "video" in kinds:
                 video_binding = resolve_video_provider(
                     video_provider,
                     model=video_model,
+                    route=video_route,
                     policy=app.runtime_policy,
                 )
         except (RuntimeError, ValueError) as exc:
@@ -204,9 +191,9 @@ def register(mcp) -> None:
 
         models: dict[str, object] = {}
         if image_binding is not None:
-            models["image"] = image_binding.as_dict()
+            models["image"] = image_binding.provenance()
         if video_binding is not None:
-            models["video"] = video_binding.as_dict()
+            models["video"] = video_binding.provenance()
 
         result = _generate_visuals_impl(
             brief_json,
