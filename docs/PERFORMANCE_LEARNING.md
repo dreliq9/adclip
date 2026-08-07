@@ -36,13 +36,15 @@ variant_id   v01
 
 `campaign_id` is created once in `.adclip_campaign.json`. `creative_id` is
 deterministic from campaign, variant, and format. Old manifests are backfilled
-when performance features first read them.
+when performance features first read them. If a portable campaign copy contains
+a manifest identity but not the hidden local state file, the manifest identity
+is used to restore that state rather than minting a different campaign.
 
 A deployment mapping then records:
 
 ```text
 deployment_id
-a dclip campaign_id
+adclip campaign_id
 adclip creative_id
 variant_id
 platform
@@ -146,8 +148,8 @@ adclip performance link-meta ./campaign \
   --ad-id 987654321
 ```
 
-Optional campaign, ad-set, creative, and ad-name IDs can be supplied at link
-time. A later sync refreshes metadata from Meta.
+Optional external campaign, ad-set, creative, and ad-name IDs can be supplied at
+link time. A later sync refreshes metadata from Meta.
 
 ### 3. Sync one exact measurement window
 
@@ -193,16 +195,20 @@ adclip performance compare ./campaign \
 Supported initial comparison metrics:
 
 ```text
-ctr
-outbound_ctr
-cpc
-cpm
+ctr                 clicks / impressions
+outbound_ctr        outbound clicks / impressions
+cpc                 spend / clicks
+cpm                 spend * 1000 / impressions
 impressions
 clicks
-action_rate
-cost_per_action
-roas
+action_rate         selected action count / clicks
+cost_per_action     spend / selected action count
+roas                selected action value / spend
 ```
+
+Reports also preserve `action_rates_per_impression` so users can inspect an
+impression-normalized action rate explicitly instead of overloading the meaning
+of conversion rate.
 
 ## Interpretation rules
 
@@ -215,6 +221,8 @@ The first learning layer is intentionally descriptive.
   `reported_reach_sum` and explicitly mark `reach_is_additive: false`.
 - Action-rate, CPA, and ROAS comparisons require an explicit platform action
   type.
+- `action_rate` means actions per click; impression-normalized action rates are
+  separately named.
 - Overlapping windows are stored but never silently summed by the default report.
 - Attribution/reporting-time differences remain visible in each observation.
 
