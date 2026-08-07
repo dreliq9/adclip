@@ -80,7 +80,11 @@ def summarize_observations(
             _merge_metric_map(action_values, item.metrics.action_values)
             _merge_metric_map(video, item.metrics.video)
 
-        action_rates = {
+        action_rates_per_click = {
+            key: _ratio(value, float(clicks))
+            for key, value in sorted(actions.items())
+        }
+        action_rates_per_impression = {
             key: _ratio(value, float(impressions))
             for key, value in sorted(actions.items())
         }
@@ -119,7 +123,9 @@ def summarize_observations(
                         if impressions
                         else None
                     ),
-                    "action_rates": action_rates,
+                    "action_rates": action_rates_per_click,
+                    "action_rates_per_click": action_rates_per_click,
+                    "action_rates_per_impression": action_rates_per_impression,
                     "cost_per_action": cost_per_action,
                     "roas": roas,
                 },
@@ -160,7 +166,7 @@ def compare_observations(
         elif metric in {"ctr", "outbound_ctr", "cpc", "cpm"}:
             value = derived.get(metric)
         elif metric == "action_rate":
-            value = dict(derived.get("action_rates", {})).get(action_type)
+            value = dict(derived.get("action_rates_per_click", {})).get(action_type)
         elif metric == "cost_per_action":
             value = dict(derived.get("cost_per_action", {})).get(action_type)
         else:
@@ -190,6 +196,7 @@ def compare_observations(
     return {
         "metric": metric,
         "action_type": action_type,
+        "action_rate_denominator": "clicks" if metric == "action_rate" else None,
         "direction": "lower_is_better" if lower_is_better else "higher_is_better",
         "descriptive_only": True,
         "causal_claim": False,
