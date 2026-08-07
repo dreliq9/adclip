@@ -1,0 +1,39 @@
+{
+  "campaign_name": "atlas-launch-week",
+  "product": "Atlas Power Station",
+  "value_prop": "A modular power platform for teams that build, test, and iterate.",
+  "audience": "Practical product teams and technical founders",
+  "objective": "Introduce Atlas and drive qualified visits to the launch page.",
+  "offer": "Launch pricing is available this week.",
+  "tone": "clear, capable, and free of hype",
+  "cta": "Explore Atlas",
+  "landing_url": "https://example.com/atlas",
+  "sender": {
+    "name": "Atlas Team",
+    "email": "hello@example.com",
+    "reply_to": "support@example.com",
+    "physical_address": "123 Main Street, Boise, ID 83702"
+  },
+  "template": "promotion",
+  "message_type": "marketing",
+  "locale": "en-US",
+  "variants": 2,
+  "logo_url": "https://example.com/assets/atlas-logo.png",
+  "unsubscribe_url": "{{unsubscribe_url}}",
+  "preferences_url": "{{preferences_url}}",
+  "theme": {
+    "background_color": "#F3F4F6",
+    "content_background_color": "#FFFFFF",
+    "text_color": "#111827",
+    "muted_text_color": "#6B7280",
+    "accent_color": "#0F766E",
+    "button_text_color": "#FFFFFF"
+  },
+  "tracking": {
+    "enabled": true,
+    "source": "email",
+    "medium": "email",
+    "campaign": "atlas-launch-week"
+  },
+  "output_dir": "/tmp/adclip_atlas_email"
+}
