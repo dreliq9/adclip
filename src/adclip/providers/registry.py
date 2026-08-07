@@ -55,7 +55,10 @@ class TextProviderRegistry:
         *,
         default_name: str = "claude-cli",
     ) -> None:
-        self.default_name = default_name
+        self.default_name = (
+            "claude-cli" if default_name.strip() == "default"
+            else default_name.strip()
+        )
         self._specs: dict[str, TextProviderSpec] = {}
         self._aliases: dict[str, str] = {}
         for spec in specs:
@@ -229,6 +232,16 @@ def _fake_factory(context: TextProviderContext) -> TextGenerationProvider:
     return FakeLLMProvider(model=context.model or "fake-v1")
 
 
+def _command_factory(context: TextProviderContext) -> TextGenerationProvider:
+    from adclip.providers.command import CommandTextProvider
+
+    return CommandTextProvider(
+        os.environ.get("ADCLIP_COMMAND_TEXT_COMMAND", ""),
+        model=context.model,
+        timeout=float(os.environ.get("ADCLIP_COMMAND_TEXT_TIMEOUT", "90")),
+    )
+
+
 def _claude_cli_factory(context: TextProviderContext) -> TextGenerationProvider:
     from adclip.claude_cli import ClaudeCliProvider
 
@@ -270,6 +283,20 @@ def default_text_registry() -> TextProviderRegistry:
                 default_model="fake-v1",
                 capabilities=ProviderCapabilities(
                     structured_output=True,
+                    supports_local_inference=True,
+                ),
+            ),
+            TextProviderSpec(
+                name="command",
+                aliases=("local-command",),
+                factory=_command_factory,
+                description=(
+                    "Any local executable that reads the prompt on stdin and "
+                    "writes the model response to stdout."
+                ),
+                model_env="ADCLIP_COMMAND_TEXT_MODEL",
+                capabilities=ProviderCapabilities(
+                    structured_output=False,
                     supports_local_inference=True,
                 ),
             ),
