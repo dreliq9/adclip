@@ -2,112 +2,157 @@
 
 ## Standalone product contract
 
-adclip is a standalone, local-first marketing creative application. MCP is one
-interface adapter; it is not the application architecture.
+adclip is a standalone, local-first, model-agnostic marketing creative
+application. MCP is one interface adapter; it is not the application
+architecture.
 
-Read `docs/STANDALONE_ARCHITECTURE.md` before making architectural changes.
-The following rules are binding:
+Read `docs/STANDALONE_ARCHITECTURE.md` and `docs/MODEL_PROVIDERS.md` before
+making architectural changes. These rules are binding:
 
 - Core/domain/application modules must not import from `adclip.mcp`.
 - CLI, MCP, and future HTTP/UI code are sibling adapters over
   `AdclipApplication`.
 - New workflows belong in the application layer, not private MCP helpers.
+- Workflow code selects capabilities; it must not branch on vendor or model
+  names.
+- Provider and model are separate values. A provider adapter receives the
+  selected model through its construction context.
 - Provider implementations are selected through registries/capability
   interfaces rather than transport-specific conditionals.
 - declip, FCP-MCP, youtube-mcp-v2, the Abductive Reasoning Kernel, and platform
   MCPs are optional enhancements. Baseline workflows may not require them.
-- Existing CLI commands, MCP tool names, JSON briefs, and campaign-directory
-  exports remain compatible while the persistent application is built.
+- Existing CLI commands, compatibility flags, MCP tool names, JSON briefs, and
+  campaign-directory exports remain compatible during migration.
+
+## Runtime policy
 
 Runtime modes are controlled by `ADCLIP_RUNTIME_MODE`:
-`online`, `restricted_network`, `offline`, and `air_gapped`. Restricted mode
-uses `ADCLIP_ALLOWED_NETWORK_PROVIDERS`. Paid providers still require
-`ADCLIP_ALLOW_LIVE_APIS=1`.
+
+```text
+online
+restricted_network
+offline
+air_gapped
+```
+
+`ADCLIP_ALLOWED_NETWORK_PROVIDERS` controls external access in restricted mode.
+Paid providers still require `ADCLIP_ALLOW_LIVE_APIS=1`.
+
+Loopback HTTP inference is allowed in offline and air-gapped modes. External
+HTTP endpoints are not. Endpoint-configurable adapters must re-check runtime
+requirements after reading their configured URL.
+
+## Provider and model configuration
+
+Primary configuration:
+
+```text
+ADCLIP_TEXT_PROVIDER
+ADCLIP_TEXT_MODEL
+ADCLIP_IMAGE_PROVIDER
+ADCLIP_IMAGE_MODEL
+ADCLIP_VIDEO_PROVIDER
+ADCLIP_VIDEO_MODEL
+```
+
+Provider-specific text model variables currently include:
+
+```text
+ADCLIP_CLAUDE_MODEL
+ADCLIP_ANTHROPIC_MODEL
+ADCLIP_OPENAI_MODEL
+```
+
+The generic OpenAI-compatible adapter uses:
+
+```text
+ADCLIP_OPENAI_BASE_URL
+ADCLIP_OPENAI_API_KEY       # optional for local endpoints
+ADCLIP_OPENAI_TIMEOUT
+```
+
+Do not add a vendor SDK when the standard compatible HTTP contract is
+sufficient. Do not import vendor code into application, campaign, policy,
+scoring, CLI, or MCP modules.
+
+## Built-in text paths
+
+1. **Claude CLI** (`claude-cli`) — subscription-authenticated subprocess.
+   Compatibility default; still an external-network provider.
+2. **MCP sampling** (`sampling`) — delegates to a sampling-capable host. The
+   host controls model selection.
+3. **Direct Anthropic** (`anthropic`) — opt-in paid API adapter.
+4. **OpenAI-compatible** (`openai-compatible`) — generic local or hosted
+   `/v1/chat/completions` endpoint; no SDK dependency.
+5. **Fake** (`fake`) — deterministic in-process test provider.
+
+The legacy names `LLMProviderRegistry`, `LLMProviderSpec`,
+`default_llm_registry`, `resolve_llm_provider`, and `llm_*` arguments remain as
+compatibility aliases. New code should use text-provider terminology.
 
 ## Vendored declip slice
 
-`src/adclip/_video_backend.py` is a small (~350-line) vendored slice of
-declip's `fetch_models.py` and `ops.loudnorm`. It is the **only** code adclip
-needs from declip; the rest of declip's video-editor surface is out of scope
-here. adclip is pipx-installable as a single package — do not add `declip` as a
-runtime dependency.
+`src/adclip/_video_backend.py` is a small vendored slice of declip's model
+catalog and loudness logic. It is the only code adclip needs from declip. Do
+not add `declip` as a runtime dependency.
 
-When to sync `_video_backend.py` against declip:
+Sync the slice when:
 
-- fal.ai redesigns its `/explore` page (breaks `_CARD_PATTERN`)
-- New model families ship and we want hardcoded aliases beyond the live
-  catalog (Kling/Wan/Veo/Sora successors)
-- declip refines the loudnorm two-pass logic in a way we want
+- fal.ai changes the catalog shape;
+- useful new video aliases need coverage;
+- relevant loudness logic improves in declip.
 
-The earlier `render_schema.py` + `backends/ffmpeg.py` vendoring drifted because
-those files were huge AND adclip did not actually use them. The current slice
-is small, fully exercised, and easy to keep in sync.
+## Billing safety
 
-## No API key, by construction
+adclip does not require a paid API on its default path. Do not add keys as a
+workaround for provider-selection errors. A potentially paid provider must be
+explicitly selected and authorized.
 
-adclip never requires `ANTHROPIC_API_KEY` on its default path. Any runtime
-error mentioning a missing key means the direct paid provider was selected.
-**Do not add the key as a workaround.** Do not rewrite the LLM layer to make a
-paid provider the default.
-
-## The three production LLM provider paths
-
-1. **Claude CLI subprocess** (`ClaudeCliProvider`) — shells out to `claude -p`
-   using the user's subscription auth. No API key. This is the default for both
-   MCP tools and CLI. It is still a network-requiring provider and is refused
-   in offline/air-gapped runtime modes.
-
-2. **MCP sampling** (`SamplingLLMProvider`) — opt-in via
-   `llm_provider="sampling"`. The host MCP client runs completions on adclip's
-   behalf. No key. It requires a sampling-capable connected session.
-
-3. **Direct Anthropic API** (`AnthropicProvider`) — opt-in only, for users with
-   a key. Never a default. It is gated behind `ADCLIP_ALLOW_LIVE_APIS=1` so a
-   stray key in the environment cannot silently bill the user.
-
-`FakeLLMProvider` is the deterministic test path.
-
-Provider names and requirements are registered in
-`adclip.providers.registry`; do not recreate resolver branches in interface
-modules.
+A non-loopback OpenAI-compatible endpoint is conservatively treated as
+potentially paid even when no key is configured. This may be relaxed later by
+an explicit provider configuration record, not by guessing from a URL.
 
 ## Testing
 
-Use `--llm fake` / `provider_name="fake"` in tests. `FakeLLMProvider` is
-deterministic and sync-safe via `asyncio.run`.
+Use `fake` providers for deterministic workflow tests. Provider tests should
+cover:
 
-For interface work, verify that:
+- provider and model selected independently;
+- explicit model overriding provider defaults;
+- compatibility aliases continuing to resolve;
+- local compatible HTTP allowed offline;
+- external compatible HTTP blocked offline;
+- external potentially paid endpoints requiring authorization;
+- CLI importing no module under `adclip.mcp`;
+- MCP forwarding provider and model without vendor conditionals;
+- image and video model overrides reaching their adapters.
 
-- application tests do not need MCP installed or running;
-- CLI imports no module under `adclip.mcp`;
-- MCP compatibility helpers preserve existing tool behavior;
-- offline mode rejects network providers before invocation;
-- fake providers continue to work in offline mode.
+Use mocked HTTP for the OpenAI-compatible adapter. Do not require a running
+model server in the unit suite.
 
-## If you hit an LLM error
+## Common errors
 
-- `Provider 'claude-cli' requires network access`: runtime mode is `offline` or
-  `air_gapped`. Select a local provider when one is configured, use `fake` in
-  tests, or switch runtime mode intentionally.
-- `Provider 'anthropic' may incur paid API charges`: set
-  `ADCLIP_ALLOW_LIVE_APIS=1` only when paid use is intended.
-- `sampling provider requires an MCP session`: use `claude-cli` outside a
-  sampling-capable MCP host.
-- `ANTHROPIC_API_KEY not set`: direct Anthropic was selected. Use the default
-  provider unless direct API usage is intentional.
-- `claude CLI failed`: check `which claude` and active subscription auth.
+- `requires network access outside loopback`: an external provider was selected
+  in offline or air-gapped mode.
+- `may incur paid API charges`: set `ADCLIP_ALLOW_LIVE_APIS=1` only when use is
+  intentional.
+- `requires an MCP session`: sampling was selected outside an appropriate host.
+- `requires an explicit model`: pass `--model`/`--text-model` or configure
+  `ADCLIP_TEXT_MODEL`.
+- `requires ADCLIP_OPENAI_BASE_URL`: configure the compatible HTTP API base.
+- `claude CLI failed`: check the executable and subscription auth.
 
 ## Current scope
 
-- Static ads + text ads
-- 9:16 video ads through the vendored video slice
-- Self-review loops: judge + heal + semantic policy
-- Keyless CLI through the Claude subprocess provider
-- Full MCP tool surface: brief/cost/format, copy, policy, generation,
-  iteration, scoring, status, and modular Meta export
+- Static, text, and 9:16 video creative
+- Policy, healing, semantic review, and judging
 - Transport-neutral `AdclipApplication`
-- Centralized LLM provider registry and runtime policy
+- Provider-neutral text contract and registry
+- Independent text/image/video model selection
+- Local or hosted OpenAI-compatible text inference
+- Explicit runtime and paid-provider policy
+- Standalone CLI and full MCP surface
 
-The next standalone milestones are SQLite persistence, content-addressed
-artifacts, durable/resumable jobs, BrandKit/SourceLibrary, and `adclip serve`.
-An adversarial critic remains deferred.
+The next standalone milestone remains S1: SQLite persistence,
+content-addressed artifacts, stable IDs/Manifest v2, and durable resumable
+jobs. Provider/model identity must become persistent provenance in that work.
