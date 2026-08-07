@@ -37,6 +37,9 @@ ADCLIP_VIDEO_PROVIDER
 ADCLIP_VIDEO_MODEL
 ```
 
+The same selection contract now applies to full generation, visual-only
+generation, variant regeneration, and LLM-based variant judging.
+
 ## Built-in text adapters
 
 | Provider | Model selection | Runtime |
@@ -45,7 +48,10 @@ ADCLIP_VIDEO_MODEL
 | `sampling` | Host-selected | Requires a sampling-capable MCP session |
 | `anthropic` | `ADCLIP_ANTHROPIC_MODEL` or explicit model | External, potentially paid |
 | `openai-compatible` | Required explicit/configured model | Local loopback or external compatible endpoint |
+| `command` | `ADCLIP_COMMAND_TEXT_MODEL` or explicit model | Local subprocess; allowed air-gapped |
 | `fake` | Any identity accepted for deterministic tests | In-process |
+
+### OpenAI-compatible HTTP
 
 The `openai-compatible` adapter uses the HTTP contract directly and does not
 require a vendor SDK. Configure it with:
@@ -61,6 +67,22 @@ The base URL may point to any server or gateway implementing
 `/v1/chat/completions`. `ADCLIP_OPENAI_API_KEY` is optional for loopback
 servers. A non-loopback endpoint is treated as external and potentially paid,
 so it requires normal runtime authorization.
+
+### Generic local command
+
+The `command` adapter supports local model CLIs that do not expose HTTP:
+
+```bash
+export ADCLIP_TEXT_PROVIDER=command
+export ADCLIP_COMMAND_TEXT_COMMAND='my-model-cli --model {model} --json'
+export ADCLIP_COMMAND_TEXT_MODEL=my-local-model
+export ADCLIP_RUNTIME_MODE=air_gapped
+```
+
+The executable receives the prompt on stdin and must write the raw response to
+stdout. adclip never invokes a shell. Individual command arguments may contain
+`{model}` and `{n}` placeholders; the same values are available in
+`ADCLIP_MODEL` and `ADCLIP_CANDIDATE_COUNT`.
 
 ## CLI examples
 
@@ -89,6 +111,20 @@ Compatibility flags remain available:
 --video        -> --video-provider
 ```
 
+## Media model IDs
+
+The fal image adapter accepts both friendly aliases and raw endpoint IDs:
+
+```text
+flux-dev
+imagen-3
+fal-ai/vendor/custom-image-model
+```
+
+The video adapter already accepts aliases and raw endpoints through its model
+catalog resolver. Unknown-model pricing remains conservative until the model
+cost registry is introduced.
+
 ## Runtime policy
 
 Loopback inference is not equivalent to external network access. Local HTTP
@@ -96,9 +132,9 @@ model servers are allowed in `offline` and `air_gapped` modes. External
 endpoints are refused in those modes. In `restricted_network`, external
 providers require an allowlist entry.
 
-Provider adapters whose endpoints are configurable must re-evaluate runtime
-requirements after reading their endpoint. Static registry metadata alone is
-not sufficient.
+Local command providers require no network access. Provider adapters whose
+endpoints are configurable must re-evaluate runtime requirements after reading
+their endpoint. Static registry metadata alone is not sufficient.
 
 ## Extension contract
 
@@ -136,6 +172,6 @@ cost estimate and actual cost
 artifact hash
 ```
 
-The current application result includes selected provider/model identities.
-Manifest v2 and durable jobs will make this provenance persistent in milestone
-S1.
+The current application and model-using MCP workflows return selected
+provider/model identities. Manifest v2 and durable jobs will make this
+provenance authoritative in milestone S1.
