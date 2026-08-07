@@ -1,4 +1,4 @@
-"""MCP tool: adclip_generate_visuals (visual-only pipeline, reuses existing copy)."""
+"""MCP tool: adclip_generate_visuals (visual-only pipeline)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Callable
 
 from pydantic import ValidationError
 
+from adclip.application import AdclipApplication
 from adclip.campaign import init_campaign_dir, variant_dir, write_manifest
 from adclip.compose import build_overlay_plan
 from adclip.formats import get_format
@@ -20,12 +21,12 @@ def _validate_copies(copies: list[dict]) -> str | None:
     if not isinstance(copies, list) or not copies:
         return "copies must be a non-empty list of dicts"
     required = {"headline", "body", "cta", "format"}
-    for i, c in enumerate(copies):
-        if not isinstance(c, dict):
-            return f"copies[{i}] is not a dict"
-        missing = required - c.keys()
+    for index, copy in enumerate(copies):
+        if not isinstance(copy, dict):
+            return f"copies[{index}] is not a dict"
+        missing = required - copy.keys()
         if missing:
-            return f"copies[{i}] missing required fields: {sorted(missing)}"
+            return f"copies[{index}] missing required fields: {sorted(missing)}"
     return None
 
 
@@ -38,17 +39,17 @@ def _generate_visuals_impl(
 ) -> dict:
     try:
         brief = AdBrief(**json.loads(brief_json))
-    except (ValidationError, ValueError, json.JSONDecodeError) as e:
-        return {"ok": False, "error": f"brief_json invalid: {e}"}
+    except (ValidationError, ValueError, json.JSONDecodeError) as exc:
+        return {"ok": False, "error": f"brief_json invalid: {exc}"}
 
     try:
         copies = json.loads(copies_json)
-    except json.JSONDecodeError as e:
-        return {"ok": False, "error": f"copies_json invalid: {e}"}
+    except json.JSONDecodeError as exc:
+        return {"ok": False, "error": f"copies_json invalid: {exc}"}
 
-    err = _validate_copies(copies)
-    if err:
-        return {"ok": False, "error": err}
+    error = _validate_copies(copies)
+    if error:
+        return {"ok": False, "error": error}
 
     if image_fn is None:
         from adclip.image_gen import generate_image as image_fn  # type: ignore
@@ -59,64 +60,71 @@ def _generate_visuals_impl(
     entries: list[dict] = []
     total_cost = 0.0
 
-    for i, copy in enumerate(copies, start=1):
-        vid = f"v{i:02d}"
-        vdir = variant_dir(brief, vid)
+    for index, copy in enumerate(copies, start=1):
+        variant_id = f"v{index:02d}"
+        vdir = variant_dir(brief, variant_id)
         (vdir / "copy.json").write_text(json.dumps(copy, indent=2))
 
         try:
             fmt = get_format(copy["format"])
-        except KeyError as e:
-            return {"ok": False, "error": str(e)}
+        except KeyError as exc:
+            return {"ok": False, "error": str(exc)}
 
         if fmt.kind == "text":
-            out = vdir / f"{copy['format']}.json"
-            out.write_text(json.dumps(copy, indent=2))
+            output = vdir / f"{copy['format']}.json"
+            output.write_text(json.dumps(copy, indent=2))
             entries.append({
-                "variant_id": vid,
+                "variant_id": variant_id,
                 "format": copy["format"],
-                "path": f"variants/{vid}/{copy['format']}.json",
+                "path": f"variants/{variant_id}/{copy['format']}.json",
             })
             continue
 
+        prompt = build_image_prompt(
+            brief,
+            format_name=copy["format"],
+            variant_copy=copy,
+        )
         if fmt.kind == "static":
-            prompt = build_image_prompt(
-                brief, format_name=copy["format"], variant_copy=copy,
+            image = image_fn(
+                prompt,
+                format_name=copy["format"],
+                output_dir=str(vdir),
+                seed=index,
             )
-            img = image_fn(
-                prompt, format_name=copy["format"], output_dir=str(vdir), seed=i,
-            )
-            total_cost += img.cost_usd
-
+            total_cost += image.cost_usd
             plan = build_overlay_plan(
-                format_name=copy["format"], copy=copy, logo_path=brief.logo_path,
+                format_name=copy["format"],
+                copy=copy,
+                logo_path=brief.logo_path,
             )
             final = vdir / f"{copy['format']}.png"
-            render_static_ad(plan, background=img.local_path, output=str(final))
+            render_static_ad(plan, background=image.local_path, output=str(final))
             entries.append({
-                "variant_id": vid,
+                "variant_id": variant_id,
                 "format": copy["format"],
-                "path": f"variants/{vid}/{copy['format']}.png",
+                "path": f"variants/{variant_id}/{copy['format']}.png",
             })
             continue
 
-        # video
-        prompt = build_image_prompt(
-            brief, format_name=copy["format"], variant_copy=copy,
-        )
         clip = video_fn(
-            prompt, format_name=copy["format"], output_dir=str(vdir), seed=i,
+            prompt,
+            format_name=copy["format"],
+            output_dir=str(vdir),
+            seed=index,
         )
         total_cost += clip.cost_usd
         plan = build_overlay_plan(
-            format_name=copy["format"], copy=copy, logo_path=brief.logo_path,
+            format_name=copy["format"],
+            copy=copy,
+            logo_path=brief.logo_path,
         )
         final = vdir / f"{copy['format']}.mp4"
         render_video_ad(plan, background=clip.local_path, output=str(final))
         entries.append({
-            "variant_id": vid,
+            "variant_id": variant_id,
             "format": copy["format"],
-            "path": f"variants/{vid}/{copy['format']}.mp4",
+            "path": f"variants/{variant_id}/{copy['format']}.mp4",
         })
 
     write_manifest(brief, entries=entries, cost_usd=total_cost)
@@ -134,33 +142,55 @@ def register(mcp) -> None:
         brief_json: str,
         copies_json: str,
         image_provider: str = "default",
+        image_model: str | None = None,
         video_provider: str = "default",
+        video_model: str | None = None,
     ) -> str:
-        """Produce visuals for an existing set of copies — no LLM call.
+        """Produce visuals for selected copy without another text-model call.
 
-        Typical workflow: call adclip_generate_copy first to iterate on
-        copy cheaply, then pass the selected winners here to materialize
-        the full campaign (images + overlays + manifest).
-
-        Args:
-            brief_json: JSON-encoded AdBrief.
-            copies_json: JSON-encoded list of copy dicts. Each must have
-                ``headline``, ``body``, ``cta``, ``format``, and
-                typically ``angle``.
-            image_provider: 'default' (fal.ai Flux) or 'fake' (tests).
-            video_provider: 'default' (fal.ai via declip) or 'fake' (tests).
+        Image and video provider/model pairs are selected independently and
+        follow the same environment/runtime policy as the full pipeline.
         """
-        image_fn = None
-        if image_provider == "fake":
-            from adclip.mcp.pipeline_tools import _fake_image_fn
-            image_fn = _fake_image_fn
+        app = AdclipApplication()
+        try:
+            copies = json.loads(copies_json)
+            format_kinds = {
+                get_format(copy["format"]).kind
+                for copy in copies
+                if isinstance(copy, dict) and "format" in copy
+            }
+            image_binding = None
+            if "static" in format_kinds:
+                from adclip.providers.media import resolve_image_provider
 
-        video_fn = None
-        if video_provider == "fake":
-            from adclip.mcp.pipeline_tools import _fake_video_fn
-            video_fn = _fake_video_fn
+                image_binding = resolve_image_provider(
+                    image_provider,
+                    model=image_model,
+                    policy=app.runtime_policy,
+                )
+            video_binding = None
+            if "video" in format_kinds:
+                from adclip.providers.media import resolve_video_provider
+
+                video_binding = resolve_video_provider(
+                    video_provider,
+                    model=video_model,
+                    policy=app.runtime_policy,
+                )
+        except (ValueError, RuntimeError, json.JSONDecodeError, KeyError) as exc:
+            return json.dumps({"ok": False, "error": str(exc)})
 
         result = _generate_visuals_impl(
-            brief_json, copies_json, image_fn=image_fn, video_fn=video_fn,
+            brief_json,
+            copies_json,
+            image_fn=image_binding,
+            video_fn=video_binding,
         )
+        if result.get("ok"):
+            models: dict[str, dict[str, str | None]] = {}
+            if image_binding is not None:
+                models["image"] = image_binding.as_dict()
+            if video_binding is not None:
+                models["video"] = video_binding.as_dict()
+            result["models"] = models
         return json.dumps(result)
