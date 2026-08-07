@@ -19,18 +19,18 @@ def performance_group() -> None:
 @click.option("--variant-id", required=True)
 @click.option("--account-id", required=True)
 @click.option("--ad-id", required=True)
-@click.option("--campaign-id", default=None, help="Optional Meta campaign ID.")
-@click.option("--adset-id", default=None, help="Optional Meta ad set ID.")
-@click.option("--creative-id", default=None, help="Optional Meta creative ID.")
+@click.option("--external-campaign-id", default=None, help="Optional Meta campaign ID.")
+@click.option("--external-adset-id", default=None, help="Optional Meta ad set ID.")
+@click.option("--external-creative-id", default=None, help="Optional Meta creative ID.")
 @click.option("--name", default=None, help="Optional external ad name.")
 def link_meta_cmd(
     campaign_dir: str,
     variant_id: str,
     account_id: str,
     ad_id: str,
-    campaign_id: str | None,
-    adset_id: str | None,
-    creative_id: str | None,
+    external_campaign_id: str | None,
+    external_adset_id: str | None,
+    external_creative_id: str | None,
     name: str | None,
 ) -> None:
     """Link one local creative variant to an existing Meta ad without API writes."""
@@ -40,9 +40,9 @@ def link_meta_cmd(
         variant_id=variant_id,
         account_id=account_id,
         ad_id=ad_id,
-        campaign_id=campaign_id,
-        adset_id=adset_id,
-        creative_id=creative_id,
+        external_campaign_id=external_campaign_id,
+        external_adset_id=external_adset_id,
+        external_creative_id=external_creative_id,
         name=name,
     )
     click.echo(json.dumps(result, indent=2))
