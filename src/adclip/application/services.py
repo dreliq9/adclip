@@ -1,8 +1,8 @@
 """Application-service boundary shared by CLI, MCP, and future UI.
 
-Workflows operate on provider-neutral capabilities and explicit provider/model
-selections. Interface adapters may retain legacy ``llm_*`` parameter names,
-but vendor SDKs and model IDs do not belong in this layer.
+Workflows operate on provider-neutral capabilities, task routes, and explicit
+provider/model selections. Interface adapters may retain legacy ``llm_*``
+parameter names, but vendor SDKs and model IDs do not belong in this layer.
 """
 
 from __future__ import annotations
@@ -16,11 +16,9 @@ from pydantic import ValidationError
 from adclip.copy import generate_copy_pool
 from adclip.cost import estimate_cost
 from adclip.formats import FORMATS, get_format
+from adclip.model_routing import list_media_routes, recommend_media_route
 from adclip.policy import check_copy
-from adclip.providers.contracts import (
-    ModelSelection,
-    TextGenerationProvider,
-)
+from adclip.providers.contracts import ModelSelection, TextGenerationProvider
 from adclip.providers.media import (
     describe_media_configuration,
     resolve_image_provider,
@@ -91,14 +89,59 @@ class AdclipApplication:
             ]
         }
 
-    def estimate_cost_json(self, brief_json: str) -> dict:
+    @staticmethod
+    def list_media_routes(modality: str | None = None) -> dict:
+        if modality not in {None, "image", "video"}:
+            return {"ok": False, "error": "modality must be image or video"}
+        return {
+            "ok": True,
+            "routes": list_media_routes(modality),  # type: ignore[arg-type]
+        }
+
+    @staticmethod
+    def recommend_media_route(modality: str, **requirements: object) -> dict:
+        if modality not in {"image", "video"}:
+            return {"ok": False, "error": "modality must be image or video"}
+        allowed = {
+            "text_heavy",
+            "reference_images",
+            "reference_media",
+            "existing_video",
+            "vector_output",
+            "premium",
+            "high_volume",
+            "draft",
+            "multi_shot",
+            "brand_control",
+        }
+        unknown = sorted(set(requirements) - allowed)
+        if unknown:
+            return {"ok": False, "error": f"Unknown route requirements: {unknown}"}
+        route = recommend_media_route(modality, **requirements)  # type: ignore[arg-type]
+        return {"ok": True, "route": route.as_dict()}
+
+    def estimate_cost_json(
+        self,
+        brief_json: str,
+        *,
+        image_route_name: str | None = None,
+        image_model_name: str | None = None,
+        video_route_name: str | None = None,
+        video_model_name: str | None = None,
+    ) -> dict:
         try:
             brief = self.parse_brief_json(brief_json)
         except json.JSONDecodeError as exc:
             return {"ok": False, "error": f"Invalid JSON: {exc}"}
         except (ValidationError, ValueError) as exc:
             return {"ok": False, "error": str(exc)}
-        estimate = estimate_cost(brief)
+        estimate = estimate_cost(
+            brief,
+            image_route=image_route_name,
+            image_model=image_model_name,
+            video_route=video_route_name,
+            video_model=video_model_name,
+        )
         return {"ok": True, **asdict(estimate)}
 
     def resolve_text_provider_with_selection(
@@ -138,11 +181,7 @@ class AdclipApplication:
     ) -> TextGenerationProvider:
         """Backward-compatible alias for :meth:`resolve_text_provider`."""
 
-        return self.resolve_text_provider(
-            name,
-            model=model,
-            session=session,
-        )
+        return self.resolve_text_provider(name, model=model, session=session)
 
     @staticmethod
     def filter_copy_pool(
@@ -225,15 +264,15 @@ class AdclipApplication:
         llm_model_name: str | None = None,
         image_provider_name: str = "default",
         image_model_name: str | None = None,
+        image_route_name: str | None = None,
         video_provider_name: str = "default",
         video_model_name: str | None = None,
+        video_route_name: str | None = None,
         session: Any | None = None,
     ) -> dict:
         from adclip.pipeline import run_pipeline
 
-        requested_text_provider = (
-            text_provider_name or llm_provider_name or "default"
-        )
+        requested_text_provider = text_provider_name or llm_provider_name or "default"
         requested_text_model = text_model_name or llm_model_name
         text_provider, text_selection = self.resolve_text_provider_with_selection(
             requested_text_provider,
@@ -248,22 +287,22 @@ class AdclipApplication:
             image_binding = resolve_image_provider(
                 image_provider_name,
                 model=image_model_name,
+                route=image_route_name,
                 policy=self.runtime_policy,
             )
         if "video" in format_kinds:
             video_binding = resolve_video_provider(
                 video_provider_name,
                 model=video_model_name,
+                route=video_route_name,
                 policy=self.runtime_policy,
             )
 
-        models: dict[str, object] = {
-            "text": text_selection.as_dict(),
-        }
+        models: dict[str, object] = {"text": text_selection.as_dict()}
         if image_binding is not None:
-            models["image"] = image_binding.as_dict()
+            models["image"] = image_binding.provenance()
         if video_binding is not None:
-            models["video"] = video_binding.as_dict()
+            models["video"] = video_binding.provenance()
 
         return await run_pipeline(
             brief,
@@ -283,8 +322,10 @@ class AdclipApplication:
         llm_model_name: str | None = None,
         image_provider_name: str = "default",
         image_model_name: str | None = None,
+        image_route_name: str | None = None,
         video_provider_name: str = "default",
         video_model_name: str | None = None,
+        video_route_name: str | None = None,
         session: Any | None = None,
     ) -> dict:
         try:
@@ -300,8 +341,10 @@ class AdclipApplication:
                 llm_model_name=llm_model_name,
                 image_provider_name=image_provider_name,
                 image_model_name=image_model_name,
+                image_route_name=image_route_name,
                 video_provider_name=video_provider_name,
                 video_model_name=video_model_name,
+                video_route_name=video_route_name,
                 session=session,
             )
         except (RuntimeError, ValueError) as exc:

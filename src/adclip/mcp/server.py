@@ -1,4 +1,4 @@
-"""adclip MCP server — ad creative generation tools for Claude."""
+"""adclip MCP server — marketing creative and model-routing tools."""
 
 import logging
 import sys
@@ -9,7 +9,6 @@ _env.load()
 
 from mcp.server.fastmcp import FastMCP
 
-# All logging to stderr (MCP uses stdio for transport)
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 
 mcp = FastMCP("adclip")
@@ -24,6 +23,7 @@ def _register_all():
         pipeline_tools,
         regenerate_tools,
         render_tools,
+        routing_tools,
         score_tools,
         visual_tools,
     )
@@ -37,6 +37,7 @@ def _register_all():
     regenerate_tools.register(mcp)
     visual_tools.register(mcp)
     dco_tools.register(mcp)
+    routing_tools.register(mcp)
 
 
 _register_all()

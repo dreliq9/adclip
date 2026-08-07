@@ -33,8 +33,10 @@ async def _generate_variants_impl(
     *,
     llm_provider: str = "default",
     llm_model: str | None = None,
+    image_route: str | None = None,
     image_provider: str = "default",
     image_model: str | None = None,
+    video_route: str | None = None,
     video_provider: str = "default",
     video_model: str | None = None,
     session=None,
@@ -43,8 +45,10 @@ async def _generate_variants_impl(
         brief_json,
         llm_provider_name=llm_provider,
         llm_model_name=llm_model,
+        image_route_name=image_route,
         image_provider_name=image_provider,
         image_model_name=image_model,
+        video_route_name=video_route,
         video_provider_name=video_provider,
         video_model_name=video_model,
         session=session,
@@ -58,23 +62,27 @@ def register(mcp) -> None:
         ctx: Context,
         llm_provider: str = "default",
         llm_model: str | None = None,
+        image_route: str = "default",
         image_provider: str = "default",
         image_model: str | None = None,
+        video_route: str = "default",
         video_provider: str = "default",
         video_model: str | None = None,
     ) -> str:
-        """Run copy -> policy -> media -> compose -> render.
+        """Run copy -> policy -> routed media -> compose -> render.
 
-        Provider and model are separate for text, image, and video. The legacy
-        ``llm_*`` names remain in the MCP contract for compatibility.
+        Routes select task-appropriate defaults; explicit provider/model values
+        remain authoritative overrides.
         """
         session = ctx.request_context.session
         result = await _generate_variants_impl(
             brief_json,
             llm_provider=llm_provider,
             llm_model=llm_model,
+            image_route=image_route,
             image_provider=image_provider,
             image_model=image_model,
+            video_route=video_route,
             video_provider=video_provider,
             video_model=video_model,
             session=session,
