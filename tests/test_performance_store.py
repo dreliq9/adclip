@@ -3,6 +3,7 @@ from datetime import date
 from pathlib import Path
 
 from adclip.campaign import (
+    CAMPAIGN_STATE_FILENAME,
     ensure_campaign_state,
     ensure_manifest_identity,
     init_campaign_dir,
@@ -57,6 +58,29 @@ def test_campaign_and_creative_identity_are_stable(tmp_path):
     assert manifest["campaign_id"] == first["campaign_id"]
     assert manifest["entries"][0]["creative_id"].startswith("crv_")
     assert ensure_manifest_identity(brief.output_dir) == manifest
+
+
+def test_portable_manifest_restores_missing_local_state(tmp_path):
+    brief = _brief(tmp_path)
+    init_campaign_dir(brief)
+    write_manifest(
+        brief,
+        entries=[{
+            "variant_id": "v01",
+            "format": "meta_feed_4x5",
+            "path": "variants/v01/meta_feed_4x5.png",
+        }],
+        cost_usd=0.0,
+    )
+    original = ensure_manifest_identity(brief.output_dir)
+    root = Path(brief.output_dir)
+    (root / CAMPAIGN_STATE_FILENAME).unlink()
+
+    restored = ensure_manifest_identity(root)
+    state = ensure_campaign_state(root)
+    assert restored["campaign_id"] == original["campaign_id"]
+    assert state["campaign_id"] == original["campaign_id"]
+    assert restored["entries"][0]["creative_id"] == original["entries"][0]["creative_id"]
 
 
 def test_deployment_and_observation_upsert(tmp_path):
