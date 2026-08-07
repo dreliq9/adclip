@@ -1,4 +1,4 @@
-from adclip.video_gen import build_video_arguments
+from adclip.video_gen import build_video_arguments, resolve_video_endpoint
 
 
 def test_kling_o3_schema():
@@ -46,7 +46,17 @@ def test_seedance_schema():
     assert duration == 10.0
 
 
-def test_wan_duration_is_five_or_ten():
+def test_wan_27_accepts_flexible_duration_and_current_endpoint():
+    endpoint, args, duration = build_video_arguments(
+        "scene", model="wan-2.7", duration=8, aspect_ratio="9:16"
+    )
+    assert endpoint == "fal-ai/wan/v2.7/text-to-video"
+    assert args["duration"] == "8"
+    assert args["aspect_ratio"] == "9:16"
+    assert duration == 8.0
+
+
+def test_legacy_wan_26_duration_is_five_or_ten():
     _, args, duration = build_video_arguments(
         "scene", model="wan-2.6", duration=8, aspect_ratio="16:9"
     )

@@ -17,6 +17,7 @@ from typing import Callable, Mapping
 from adclip.model_routing import (
     MediaRoute,
     ensure_route_executable,
+    default_route_name,
     get_media_route,
     list_media_routes,
 )
@@ -150,11 +151,13 @@ def _route_selection(
             or os.environ.get(model_env)
             or (target.model if target is not None else route.primary.model)
         )
-        if target is not None:
+        if target is not None and selected_model == target.model:
             options = dict(target.options)
         elif selected_model == route.primary.model:
             options = dict(route.primary.options)
         else:
+            # A model override from a different family must not inherit options
+            # that were validated only for the route's original target.
             options = {}
     options.update(dict(explicit_options or {}))
     return route, provider, selected_model, options
@@ -290,14 +293,27 @@ def resolve_video_provider(
     )
 
 
-def describe_media_configuration() -> dict[str, object]:
-    """Return configured defaults and the complete non-executing route catalog."""
+def _describe_configured_default(modality: str) -> dict[str, object]:
+    try:
+        binding = (
+            resolve_image_provider("default", policy=RuntimePolicy())
+            if modality == "image"
+            else resolve_video_provider("default", policy=RuntimePolicy())
+        )
+        return binding.provenance()
+    except (RuntimeError, ValueError) as exc:
+        return {
+            "route": default_route_name(modality),  # type: ignore[arg-type]
+            "configuration_error": str(exc),
+        }
 
-    image = resolve_image_provider("default", policy=RuntimePolicy())
-    video = resolve_video_provider("default", policy=RuntimePolicy())
+
+def describe_media_configuration() -> dict[str, object]:
+    """Return defaults and route catalog without making status brittle."""
+
     return {
         "image": {
-            "configured_default": image.provenance(),
+            "configured_default": _describe_configured_default("image"),
             "providers": ["fal", "openai", "fake"],
             "model_override": True,
             "route_override": True,
@@ -305,7 +321,7 @@ def describe_media_configuration() -> dict[str, object]:
             "automatic_fallback": False,
         },
         "video": {
-            "configured_default": video.provenance(),
+            "configured_default": _describe_configured_default("video"),
             "providers": ["fal", "fake"],
             "model_override": True,
             "route_override": True,

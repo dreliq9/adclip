@@ -1,3 +1,4 @@
+import os
 import pytest
 
 from adclip.model_routing import (
@@ -5,7 +6,11 @@ from adclip.model_routing import (
     list_media_routes,
     recommend_media_route,
 )
-from adclip.providers.media import resolve_image_provider
+from adclip.providers.media import (
+    describe_media_configuration,
+    resolve_image_provider,
+    resolve_video_provider,
+)
 from adclip.runtime import RuntimeMode, RuntimePolicy
 
 
@@ -28,10 +33,7 @@ def test_unwired_routes_are_discoverable_but_not_executable():
     route = get_media_route("image", "reference")
     assert route.production_ready is False
     with pytest.raises(RuntimeError, match="reference_images"):
-        resolve_image_provider(
-            route="reference",
-            policy=RuntimePolicy(mode=RuntimeMode.ONLINE),
-        )
+        resolve_image_provider(route="reference", policy=RuntimePolicy(mode=RuntimeMode.ONLINE))
 
 
 def test_explicit_model_overrides_route_primary():
@@ -49,3 +51,21 @@ def test_media_catalog_includes_fallbacks_without_auto_retry():
     routes = list_media_routes("image")
     general = next(route for route in routes if route["name"] == "general")
     assert general["fallbacks"]
+
+
+def test_unrelated_model_override_does_not_inherit_route_family_options():
+    binding = resolve_video_provider(
+        "fal",
+        route="general",
+        model="veo-3.1",
+        policy=RuntimePolicy(mode=RuntimeMode.OFFLINE),
+    )
+    assert binding.options == {}
+
+
+def test_status_reports_invalid_configured_route_without_crashing(monkeypatch):
+    monkeypatch.setenv("ADCLIP_IMAGE_ROUTE", "reference")
+    status = describe_media_configuration()
+    configured = status["image"]["configured_default"]
+    assert configured["route"] == "reference"
+    assert "configuration_error" in configured

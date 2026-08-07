@@ -179,7 +179,7 @@ VIDEO_ROUTES: dict[str, MediaRoute] = {
             ),
             RouteTarget(
                 "fal",
-                "wan-2.6",
+                "wan-2.7",
                 {"duration": 5, "resolution": "720p"},
             ),
         ),
@@ -236,14 +236,19 @@ VIDEO_ROUTES: dict[str, MediaRoute] = {
         description="Lower-cost video exploration and high-volume social variants.",
         primary=RouteTarget(
             "fal",
-            "wan-2.6",
-            {"duration": 5, "resolution": "720p", "generate_audio": False},
+            "wan-2.7",
+            {"duration": 5, "resolution": "720p"},
         ),
         fallbacks=(
             RouteTarget(
                 "fal",
                 "kling-o3-standard",
                 {"duration": 5, "generate_audio": False},
+            ),
+            RouteTarget(
+                "fal",
+                "wan-2.6",
+                {"duration": 5, "resolution": "720p"},
             ),
         ),
     ),

@@ -32,6 +32,7 @@ CURRENT_MODELS: dict[str, str] = {
     "seedance-2": "bytedance/seedance-2.0/text-to-video",
     "seedance-2-fast": "bytedance/seedance-2.0/fast/text-to-video",
     "seedance-2-reference": "bytedance/seedance-2.0/reference-to-video",
+    "wan-2.7": "fal-ai/wan/v2.7/text-to-video",
     "wan-2.6": "wan/v2.6/text-to-video",
 }
 
@@ -49,6 +50,7 @@ MODEL_COST_PER_SEC: dict[str, float] = {
     "veo-3.1-fast": 0.10,
     "seedance-2": 0.3034,
     "seedance-2-fast": 0.242,
+    "wan-2.7": 0.10,
     "wan-2.6": 0.10,
 }
 
@@ -201,6 +203,26 @@ def build_video_arguments(
             args["end_image_url"] = _upload_image(end_image_path)
         return endpoint, args, float(seconds)
 
+    if "wan/v2.7" in lowered:
+        seconds = _duration_seconds(duration, minimum=2, maximum=15)
+        args = {
+            "prompt": prompt,
+            "duration": str(seconds),
+            "resolution": resolution or "720p",
+            "aspect_ratio": aspect_ratio
+            if aspect_ratio in {"16:9", "9:16", "1:1", "4:3", "3:4"}
+            else "16:9",
+        }
+        if seed is not None:
+            args["seed"] = seed
+        if negative_prompt:
+            args["negative_prompt"] = negative_prompt
+        if "audio_url" in config:
+            args["audio_url"] = config["audio_url"]
+        if "enable_prompt_expansion" in config:
+            args["enable_prompt_expansion"] = config["enable_prompt_expansion"]
+        return endpoint, args, float(seconds)
+
     if "wan/v2.6" in lowered:
         seconds = _nearest(
             _duration_seconds(duration, minimum=5, maximum=10),
@@ -260,7 +282,7 @@ def estimate_video_cost(
         base = 0.15
     elif model == "seedance-2" and resolution == "1080p":
         base = 0.682
-    elif model == "wan-2.6" and resolution == "1080p":
+    elif model in {"wan-2.7", "wan-2.6"} and resolution == "1080p":
         base = 0.15
     return round(float(base) * duration, 3)
 
