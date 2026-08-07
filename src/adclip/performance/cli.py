@@ -66,7 +66,7 @@ def deployments_cmd(campaign_dir: str) -> None:
     "--action-report-time",
     default="conversion",
     show_default=True,
-    help="Meta action attribution reporting time.",
+    help="Meta action attribution reporting time stored with the observation.",
 )
 def sync_meta_cmd(
     campaign_dir: str,
@@ -91,10 +91,28 @@ def sync_meta_cmd(
 @click.argument("campaign_dir", type=click.Path(exists=True, file_okay=False))
 @click.option("--since", default=None)
 @click.option("--until", default=None)
-def report_cmd(campaign_dir: str, since: str | None, until: str | None) -> None:
-    """Summarize an exact performance window, or the latest stored window."""
+@click.option(
+    "--action-report-time",
+    default=None,
+    help=(
+        "Select one stored attribution reporting time. Required when the requested "
+        "date window contains multiple action_report_time values."
+    ),
+)
+def report_cmd(
+    campaign_dir: str,
+    since: str | None,
+    until: str | None,
+    action_report_time: str | None,
+) -> None:
+    """Summarize one exact date/attribution window, or the latest stored window."""
 
-    result = PerformanceApplication().report(campaign_dir, since=since, until=until)
+    result = PerformanceApplication().report(
+        campaign_dir,
+        since=since,
+        until=until,
+        action_report_time=action_report_time,
+    )
     click.echo(json.dumps(result, indent=2))
 
 
@@ -102,6 +120,14 @@ def report_cmd(campaign_dir: str, since: str | None, until: str | None) -> None:
 @click.argument("campaign_dir", type=click.Path(exists=True, file_okay=False))
 @click.option("--since", required=True)
 @click.option("--until", required=True)
+@click.option(
+    "--action-report-time",
+    default=None,
+    help=(
+        "Select one stored attribution reporting time. Required when the date "
+        "window contains multiple values."
+    ),
+)
 @click.option(
     "--metric",
     type=click.Choice([
@@ -127,6 +153,7 @@ def compare_cmd(
     campaign_dir: str,
     since: str,
     until: str,
+    action_report_time: str | None,
     metric: str,
     action_type: str | None,
 ) -> None:
@@ -138,6 +165,7 @@ def compare_cmd(
         until=until,
         metric=metric,
         action_type=action_type,
+        action_report_time=action_report_time,
     )
     click.echo(json.dumps(result, indent=2))
 
