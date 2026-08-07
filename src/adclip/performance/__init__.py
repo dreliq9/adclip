@@ -1,5 +1,10 @@
-"""Portable performance lineage and observation primitives."""
+"""Portable performance lineage, experiment, and observation primitives."""
 
+from adclip.performance.experiment import (
+    EvidenceThresholds,
+    ExperimentArm,
+    ExperimentRecord,
+)
 from adclip.performance.schema import (
     DeploymentRecord,
     PerformanceMetrics,
@@ -8,6 +13,9 @@ from adclip.performance.schema import (
 
 __all__ = [
     "DeploymentRecord",
+    "EvidenceThresholds",
+    "ExperimentArm",
+    "ExperimentRecord",
     "PerformanceMetrics",
     "PerformanceObservation",
 ]
