@@ -10,27 +10,27 @@ concepts:
 workflow -> creative task -> route -> provider adapter -> model + options
 ```
 
-Campaign, policy, scoring, and interface code must not branch on model vendors.
-Provider adapters implement neutral capabilities, advertise runtime
-requirements, and translate neutral requests into vendor-specific schemas.
-Route selection is documented separately in `docs/MODEL_ROUTING.md`.
+Campaign, policy, scoring, and interface code must not branch on vendors.
+Provider adapters implement neutral capabilities, declare runtime requirements,
+and translate neutral requests into vendor-specific schemas. Route selection is
+documented in `docs/MODEL_ROUTING.md`.
 
 ## Configuration precedence
 
-Text provider selection:
+Text provider:
 
 1. explicit CLI/MCP/application argument;
 2. `ADCLIP_TEXT_PROVIDER`;
 3. compatibility default `claude-cli`.
 
-Text model selection:
+Text model:
 
 1. explicit `--model`, `--text-model`, or MCP argument;
 2. provider-specific model environment variable;
 3. `ADCLIP_TEXT_MODEL`;
 4. provider default.
 
-Media selection:
+Media:
 
 ```text
 ADCLIP_IMAGE_ROUTE
@@ -41,22 +41,22 @@ ADCLIP_VIDEO_PROVIDER
 ADCLIP_VIDEO_MODEL
 ```
 
-An explicit provider/model overrides the selected route primary. Route options
-remain unless the explicit model is unrelated to the route target, in which
-case only explicitly supplied options should be assumed.
+Explicit provider/model values override a route primary. A model override from a
+different family must not inherit options validated only for the original
+route target.
 
-## Built-in text adapters
+## Text adapters
 
-| Provider | Model selection | Runtime |
-| --- | --- | --- |
-| `claude-cli` | `ADCLIP_CLAUDE_MODEL` or explicit model | External through Claude CLI |
-| `sampling` | Host-selected | Sampling-capable MCP session |
-| `anthropic` | `ADCLIP_ANTHROPIC_MODEL` or explicit model | External, potentially paid |
-| `openai-compatible` | Required explicit/configured model | Local loopback or external compatible HTTP |
-| `command` | `ADCLIP_COMMAND_TEXT_MODEL` or explicit model | Local subprocess, air-gapped capable |
-| `fake` | Arbitrary deterministic identity | In-process |
+| Provider | Runtime |
+| --- | --- |
+| `claude-cli` | External through Claude CLI |
+| `sampling` | Sampling-capable MCP host |
+| `anthropic` | External, potentially paid |
+| `openai-compatible` | Local loopback or external compatible HTTP |
+| `command` | Local subprocess, air-gapped capable |
+| `fake` | In-process testing |
 
-### OpenAI-compatible text
+OpenAI-compatible text:
 
 ```bash
 ADCLIP_TEXT_PROVIDER=openai-compatible
@@ -65,10 +65,7 @@ ADCLIP_OPENAI_BASE_URL=http://127.0.0.1:11434/v1
 ADCLIP_RUNTIME_MODE=offline
 ```
 
-The adapter speaks `/v1/chat/completions` directly and has no OpenAI SDK
-dependency. A non-loopback endpoint is treated as external and potentially paid.
-
-### Local command text
+Local command text:
 
 ```bash
 ADCLIP_TEXT_PROVIDER=command
@@ -77,14 +74,14 @@ ADCLIP_COMMAND_TEXT_MODEL=my-local-model
 ADCLIP_RUNTIME_MODE=air_gapped
 ```
 
-The prompt is sent over stdin and the raw response is read from stdout. adclip
-never invokes a shell.
+The command adapter sends the prompt through stdin, reads stdout, and never
+invokes a shell.
 
 ## Image adapters
 
 ### fal
 
-The fal image adapter supports current aliases for:
+Supported current families include:
 
 - GPT Image 2
 - Nano Banana 2, Pro, and Lite
@@ -98,31 +95,33 @@ inference controls. Do not collapse these into one request dictionary.
 
 ### direct OpenAI
 
-The direct OpenAI adapter calls `/v1/images/generations`, accepts GPT Image model
-IDs, and handles base64 or URL results. It uses the normal live-API gate and
+The direct adapter calls `/v1/images/generations`, supports GPT Image model IDs,
+and handles base64 or URL responses. It uses the normal live-API gate and
 `ADCLIP_OPENAI_IMAGE_API_KEY` or `OPENAI_API_KEY`.
 
 ### fake
 
-The fake image provider is deterministic and intended for tests.
+The fake provider is deterministic and intended for tests.
 
 ## Video adapters
 
-The fal video adapter supports current aliases for:
+The fal adapter supports current aliases for:
 
 - Kling O3 Standard and Kling 3 Standard
 - Veo 3.1 and Veo 3.1 Fast
 - Seedance 2 Standard, Fast, and reference endpoint
-- Wan 2.6
+- Wan 2.7
+- Wan 2.6 as a legacy compatibility path
 - legacy aliases and raw endpoints
 
-Each family has a distinct request builder. Supported durations, resolution,
-aspect ratios, audio flags, reference fields, and shot controls are normalized
-before submission.
+Each family has a distinct request builder. Supported duration, resolution,
+aspect-ratio, audio, reference, and shot-control values are normalized before
+submission. Wan 2.7 supports flexible 2–15 second output; legacy Wan 2.6 keeps
+its narrower duration normalization.
 
-The fake video provider remains deterministic for tests. Runway, Recraft, local
-FLUX, and other providers are represented in the route catalog where useful,
-but are not advertised as executable until their adapters exist.
+The fake video provider remains deterministic. Runway, Recraft, local FLUX, and
+other providers appear in the route catalog only where useful; they are not
+advertised as executable until their adapters exist.
 
 ## Runtime policy
 
@@ -130,6 +129,10 @@ Loopback inference is not equivalent to external network access. Local HTTP
 model servers are allowed in `offline` and `air_gapped` modes. External
 endpoints are refused. Local command providers require no network access.
 Potentially paid providers require `ADCLIP_ALLOW_LIVE_APIS=1`.
+
+Provider status must remain inspectable even when an environment variable names
+a cataloged but currently non-executable route. Configuration errors are data,
+not a reason for `adclip status` to crash.
 
 ## Adapter extension contract
 
@@ -148,15 +151,21 @@ Adding a provider must not require campaign-level conditionals.
 
 ## Fallback policy
 
-Routes expose ordered fallback targets, but adclip does not automatically run a
-fallback after a failed paid call. The application may later support an
-explicitly authorized retry budget, but fallback execution must remain visible,
-auditable, and bounded.
+Routes expose ordered fallbacks, but adclip does not automatically run another
+paid target after failure. A future retry policy must explicitly define:
+
+```text
+maximum additional cost
+maximum attempts
+eligible failure classes
+approved fallback targets
+whether partial results may be retained
+```
 
 ## Provenance
 
-Current campaign manifests persist route/provider/model/options at run level.
-Durable generation records must eventually contain:
+Current manifests persist route/provider/model/options at run level. Durable
+records must eventually contain:
 
 ```text
 route
