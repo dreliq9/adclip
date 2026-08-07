@@ -20,6 +20,7 @@ def _register_all():
         campaign_tools,
         copy_tools,
         dco_tools,
+        email_tools,
         pipeline_tools,
         regenerate_tools,
         render_tools,
@@ -38,6 +39,7 @@ def _register_all():
     visual_tools.register(mcp)
     dco_tools.register(mcp)
     routing_tools.register(mcp)
+    email_tools.register(mcp)
 
 
 _register_all()
