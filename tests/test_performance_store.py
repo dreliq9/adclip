@@ -38,9 +38,17 @@ def _brief(tmp_path):
     )
 
 
+def _artifact(brief, content=b"creative-a"):
+    path = Path(brief.output_dir) / "variants" / "v01" / "meta_feed_4x5.png"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    return path
+
+
 def test_campaign_and_creative_identity_are_stable(tmp_path):
     brief = _brief(tmp_path)
     init_campaign_dir(brief)
+    _artifact(brief)
     first = ensure_campaign_state(brief.output_dir)
     second = ensure_campaign_state(brief.output_dir)
     assert first["campaign_id"] == second["campaign_id"]
@@ -57,12 +65,37 @@ def test_campaign_and_creative_identity_are_stable(tmp_path):
     manifest = ensure_manifest_identity(brief.output_dir)
     assert manifest["campaign_id"] == first["campaign_id"]
     assert manifest["entries"][0]["creative_id"].startswith("crv_")
+    assert len(manifest["entries"][0]["artifact_sha256"]) == 64
     assert ensure_manifest_identity(brief.output_dir) == manifest
+
+
+def test_creative_identity_changes_when_rendered_artifact_changes(tmp_path):
+    brief = _brief(tmp_path)
+    init_campaign_dir(brief)
+    artifact = _artifact(brief, b"creative-a")
+    write_manifest(
+        brief,
+        entries=[{
+            "variant_id": "v01",
+            "format": "meta_feed_4x5",
+            "path": "variants/v01/meta_feed_4x5.png",
+        }],
+        cost_usd=0.0,
+    )
+    before = ensure_manifest_identity(brief.output_dir)
+    before_entry = dict(before["entries"][0])
+
+    artifact.write_bytes(b"creative-b")
+    after = ensure_manifest_identity(brief.output_dir)
+    after_entry = after["entries"][0]
+    assert after_entry["artifact_sha256"] != before_entry["artifact_sha256"]
+    assert after_entry["creative_id"] != before_entry["creative_id"]
 
 
 def test_portable_manifest_restores_missing_local_state(tmp_path):
     brief = _brief(tmp_path)
     init_campaign_dir(brief)
+    _artifact(brief)
     write_manifest(
         brief,
         entries=[{
@@ -86,6 +119,7 @@ def test_portable_manifest_restores_missing_local_state(tmp_path):
 def test_deployment_and_observation_upsert(tmp_path):
     brief = _brief(tmp_path)
     init_campaign_dir(brief)
+    _artifact(brief)
     write_manifest(
         brief,
         entries=[{
