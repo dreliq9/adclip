@@ -2,6 +2,7 @@ from datetime import date
 
 from adclip.application.performance_services import PerformanceApplication
 from adclip.campaign import init_campaign_dir, write_manifest
+from adclip.connectors.meta_performance import MetaPerformanceClient
 from adclip.schema import AdBrief
 
 
@@ -73,8 +74,9 @@ def test_link_sync_report_and_compare(tmp_path, monkeypatch):
     assert linked["deployment"]["account_id"] == "act_123"
 
     monkeypatch.setattr(
-        "adclip.application.performance_services.MetaPerformanceClient.from_env",
-        lambda policy: _FakeMeta(),
+        MetaPerformanceClient,
+        "from_env",
+        classmethod(lambda cls, policy=None: _FakeMeta()),
     )
     synced = app.sync_meta(
         campaign_dir,
