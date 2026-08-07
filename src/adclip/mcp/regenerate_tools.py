@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Callable, Literal
 
+from mcp.server.fastmcp import Context
 from pydantic import ValidationError
 
 from adclip.application import AdclipApplication
@@ -15,6 +16,7 @@ from adclip.formats import get_format
 from adclip.image_gen import build_image_prompt
 from adclip.llm import LLMProvider, parse_copy_candidates
 from adclip.policy import check_copy
+from adclip.providers.media import resolve_image_provider
 from adclip.render import render_static_ad
 from adclip.schema import AdBrief
 from adclip.scoring import rank_pool
@@ -57,6 +59,7 @@ async def _regenerate_copy(
         {**candidate, "format": format_name, "angle": angle}
         for candidate in candidates
     ]
+
     survivors: list[dict] = []
     for candidate in candidates:
         report = check_copy(
@@ -196,7 +199,10 @@ async def _regenerate_impl(
 
     if what in ("copy", "both"):
         if llm_provider is None:
-            return {"ok": False, "error": "copy regeneration requires an llm_provider"}
+            return {
+                "ok": False,
+                "error": "copy regeneration requires an llm_provider",
+            }
         regenerated = await _regenerate_copy(
             variant_dir,
             brief,
@@ -211,7 +217,10 @@ async def _regenerate_impl(
 
     if what in ("visual", "both"):
         if image_fn is None:
-            return {"ok": False, "error": "visual regeneration requires an image_fn"}
+            return {
+                "ok": False,
+                "error": "visual regeneration requires an image_fn",
+            }
         regenerated = _regenerate_visual(
             variant_dir,
             brief,
@@ -239,6 +248,7 @@ def register(mcp) -> None:
     async def adclip_regenerate(
         campaign_dir: str,
         variant_id: str,
+        ctx: Context,
         what: str = "both",
         llm_provider: str = "default",
         llm_model: str | None = None,
@@ -247,11 +257,7 @@ def register(mcp) -> None:
         seed: int | None = None,
         pool_size: int = 3,
     ) -> str:
-        """Redo one variant's copy, static visual, or both.
-
-        Provider and model are independently selectable for each regenerated
-        modality. Existing provider arguments remain backward compatible.
-        """
+        """Redo one variant with independent provider/model selections."""
         if what not in ("copy", "visual", "both"):
             return json.dumps({
                 "ok": False,
@@ -260,43 +266,39 @@ def register(mcp) -> None:
                 ),
             })
 
-        app = AdclipApplication()
-        text_provider = None
-        text_selection = None
-        image_binding = None
+        application = AdclipApplication()
+        models: dict[str, dict[str, str | None]] = {}
+        llm = None
+        image_fn = None
+
         try:
             if what in ("copy", "both"):
-                text_provider, text_selection = (
-                    app.resolve_text_provider_with_selection(
-                        llm_provider,
-                        model=llm_model,
-                    )
+                llm, selection = application.resolve_text_provider_with_selection(
+                    llm_provider,
+                    model=llm_model,
+                    session=ctx.request_context.session,
                 )
+                models["text"] = selection.as_dict()
             if what in ("visual", "both"):
-                from adclip.providers.media import resolve_image_provider
-
                 image_binding = resolve_image_provider(
                     image_provider,
                     model=image_model,
-                    policy=app.runtime_policy,
+                    policy=application.runtime_policy,
                 )
+                image_fn = image_binding
+                models["image"] = image_binding.as_dict()
         except (RuntimeError, ValueError) as exc:
             return json.dumps({"ok": False, "error": str(exc)})
 
         result = await _regenerate_impl(
             campaign_dir,
             variant_id,
-            what=what,  # type: ignore[arg-type]
-            llm_provider=text_provider,
-            image_fn=image_binding,
+            what=what,
+            llm_provider=llm,
+            image_fn=image_fn,
             seed=seed,
             pool_size=pool_size,
         )
         if result.get("ok"):
-            models: dict[str, dict[str, str | None]] = {}
-            if text_selection is not None:
-                models["text"] = text_selection.as_dict()
-            if image_binding is not None:
-                models["image"] = image_binding.as_dict()
             result["models"] = models
         return json.dumps(result)

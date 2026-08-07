@@ -31,10 +31,12 @@ def test_visual_only_tool_has_image_and_video_model_selection():
 
 def test_regenerate_tool_has_text_and_image_model_selection():
     signature = _signature(register_regenerate, "adclip_regenerate")
+    assert "ctx" in signature.parameters
     assert "llm_model" in signature.parameters
     assert "image_model" in signature.parameters
 
 
 def test_judge_tool_has_text_model_selection():
     signature = _signature(register_score, "adclip_score_variants")
+    assert "ctx" in signature.parameters
     assert "llm_model" in signature.parameters
