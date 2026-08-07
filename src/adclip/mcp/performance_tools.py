@@ -61,13 +61,15 @@ def register(mcp) -> None:
         campaign_dir: str,
         since: str | None = None,
         until: str | None = None,
+        action_report_time: str | None = None,
     ) -> str:
-        """Summarize the latest or an exact stored performance window."""
+        """Summarize one date/attribution window; ambiguous ARTs are rejected."""
         return json.dumps(
             PerformanceApplication().report(
                 campaign_dir,
                 since=since,
                 until=until,
+                action_report_time=action_report_time,
             )
         )
 
@@ -78,8 +80,9 @@ def register(mcp) -> None:
         until: str,
         metric: str = "ctr",
         action_type: str | None = None,
+        action_report_time: str | None = None,
     ) -> str:
-        """Rank creatives descriptively; does not claim causal significance."""
+        """Rank creatives descriptively within one date/attribution window."""
         return json.dumps(
             PerformanceApplication().compare(
                 campaign_dir,
@@ -87,6 +90,7 @@ def register(mcp) -> None:
                 until=until,
                 metric=metric,
                 action_type=action_type,
+                action_report_time=action_report_time,
             )
         )
 
