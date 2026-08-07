@@ -1,5 +1,6 @@
 """Provider contracts, adapters, and registries for standalone adclip."""
 
+from adclip.providers.command import CommandTextProvider
 from adclip.providers.contracts import (
     ModelSelection,
     ProviderCapabilities,
@@ -18,6 +19,7 @@ __all__ = [
     "ModelSelection",
     "ProviderCapabilities",
     "TextGenerationProvider",
+    "CommandTextProvider",
     "TextProviderRegistry",
     "TextProviderSpec",
     "default_text_registry",
