@@ -1,52 +1,55 @@
 # Performance Learning Foundation
 
-**Status:** Active read-only foundation  
+**Status:** Active read-only learning foundation  
 **Date:** 2026-08-07
 
 ## Decision
 
-adclip owns creative identity and normalized performance observations. Ad
-platforms own delivery. Performance connectors are adapters over that boundary.
+adclip owns creative identity, deployment lineage, normalized performance
+observations, and explicit experiment hypotheses. Ad platforms own delivery.
+Connectors are adapters over that boundary.
 
-The first connector is Meta and is deliberately **read-only**. It can inspect an
-explicitly linked ad and read its Insights data. It has no campaign, ad-set, ad,
-budget, targeting, or creative mutation method.
+The first connector is Meta and is deliberately **read-only**.
 
 ```text
 adclip creative
+  -> exact artifact identity
   -> deployment mapping
   -> external ad ID
   -> read-only platform insights
   -> normalized observation
   -> descriptive comparison
-  -> future experiment inference
+  -> explicit experiment evidence
+  -> next-test recommendation
 ```
 
-## Why explicit deployment lineage comes first
+## Stable creative lineage
 
-A metric is not useful to the creative-learning loop unless it can be joined to
-the exact artifact that produced it. New adclip campaign manifests therefore
-carry:
+A metric is useful only if it can be joined to the exact creative that produced
+it. Campaign manifests therefore carry:
 
 ```text
-campaign_id  cmp_...
-creative_id  crv_...
-variant_id   v01
+campaign_id      cmp_...
+creative_id      crv_...
+variant_id       v01
+artifact_sha256  ...
 ```
 
-`campaign_id` is created once in `.adclip_campaign.json`. `creative_id` is
-deterministic from campaign, variant, and format. Old manifests are backfilled
-when performance features first read them. If a portable campaign copy contains
-a manifest identity but not the hidden local state file, the manifest identity
-is used to restore that state rather than minting a different campaign.
+`campaign_id` is stable and portable. If a copied campaign directory loses its
+hidden `.adclip_campaign.json`, adclip restores the identity from the manifest.
 
-A deployment mapping then records:
+When a rendered artifact exists, `creative_id` incorporates its SHA-256. If
+`v01` is regenerated in place, the replacement bytes receive a new creative ID
+instead of silently inheriting historical performance.
+
+A deployment mapping snapshots:
 
 ```text
 deployment_id
 adclip campaign_id
 adclip creative_id
 variant_id
+artifact path/hash
 platform
 account_id
 external campaign/ad-set/ad/creative IDs
@@ -54,13 +57,12 @@ external status/name
 last sync time
 ```
 
-The mapping is explicit. adclip does not guess that two visually similar assets
-are the same creative.
+The mapping is explicit. adclip does not guess that visually similar files are
+the same creative.
 
 ## Portable storage
 
-Before SQLite becomes authoritative, performance state remains transparent and
-portable inside the campaign directory:
+Until SQLite becomes authoritative:
 
 ```text
 campaign/
@@ -69,20 +71,20 @@ campaign/
   performance/
     deployments.json
     observations.json
+    experiments.json
 ```
 
-Re-syncing the same deployment and exact date window updates the deterministic
-observation ID rather than creating duplicate measurements.
+Re-syncing the same deployment and exact date window replaces the deterministic
+observation record rather than duplicating it.
 
 ## Meta read-only connector
 
-The connector uses bearer-authenticated GET requests against the Meta Marketing
-API. It reads:
+The Meta adapter only implements HTTP GET. It reads:
 
-1. ad metadata for identity verification and external lineage;
+1. explicit linked-ad metadata for identity verification;
 2. `/{ad_id}/insights` for the requested date window.
 
-The normalized metric set includes:
+Normalized metrics include:
 
 ```text
 impressions
@@ -96,50 +98,38 @@ video thruplay / 25 / 50 / 75 / 95 / 100 percent metrics
 currency
 ```
 
-Meta action names are preserved rather than prematurely mapped into a universal
-conversion taxonomy. A later semantic layer can map platform action types only
-when the mapping is explicit and auditable.
+Platform action names remain intact instead of being guessed into a universal
+conversion taxonomy.
 
 ### Configuration
 
 ```text
-ADCLIP_META_ACCESS_TOKEN     required for live sync
+ADCLIP_META_ACCESS_TOKEN
 META_ACCESS_TOKEN            compatibility fallback
 ADCLIP_META_API_VERSION      default: v24.0
 ADCLIP_META_BASE_URL         default: https://graph.facebook.com
 ADCLIP_META_TIMEOUT          default: 30 seconds
 ```
 
-`v24.0` is a compatibility default, not a claim that it will always be Meta's
-latest version. Keep the version configurable and advance it only with adapter
-and test updates.
+The API version is configurable and must be advanced only with adapter/test
+updates. Tokens are never persisted into campaign artifacts or returned by
+reports.
 
-A read-capable Marketing API token is required. `ads_read` is the expected
-permission for read-only ad-account access. The token is never written into a
-campaign file or returned from status/report calls.
-
-### Runtime policy
-
-Meta performance sync requires external network access and therefore obeys:
+### Runtime behavior
 
 ```text
 online                 allowed
-restricted_network     requires meta-performance in the allowlist
+restricted_network     requires meta-performance in allowlist
 offline                blocked
 air_gapped             blocked
 ```
 
-Read-only Insights access does **not** require `ADCLIP_ALLOW_LIVE_APIS=1`
-because it is not a model-generation billing authorization. That flag remains
-reserved for potentially paid generation providers.
+Read-only Insights retrieval does not use the paid-generation authorization
+flag because it is not a generative provider call.
 
-## Workflow
+## Performance workflow
 
-### 1. Generate or import a campaign
-
-The manifest will contain stable creative IDs.
-
-### 2. Link a deployed Meta ad
+Link an existing Meta ad:
 
 ```bash
 adclip performance link-meta ./campaign \
@@ -148,10 +138,7 @@ adclip performance link-meta ./campaign \
   --ad-id 987654321
 ```
 
-Optional external campaign, ad-set, creative, and ad-name IDs can be supplied at
-link time. A later sync refreshes metadata from Meta.
-
-### 3. Sync one exact measurement window
+Sync one exact measurement window:
 
 ```bash
 export ADCLIP_META_ACCESS_TOKEN=...
@@ -161,38 +148,25 @@ adclip performance sync-meta ./campaign \
   --until 2026-08-07
 ```
 
-The connector reads only linked ad IDs. It does not scan an account and does not
-modify delivery state.
-
-### 4. Inspect the latest or an exact window
+Report:
 
 ```bash
 adclip performance report ./campaign
-
-adclip performance report ./campaign \
-  --since 2026-08-01 \
-  --until 2026-08-07
 ```
 
-When no dates are supplied, adclip selects the latest exact stored window rather
-than aggregating arbitrary overlapping observations.
+Without dates, adclip selects the latest exact stored window rather than
+silently adding overlapping periods.
 
-### 5. Compare creatives descriptively
+Compare descriptively:
 
 ```bash
 adclip performance compare ./campaign \
   --since 2026-08-01 \
   --until 2026-08-07 \
   --metric ctr
-
-adclip performance compare ./campaign \
-  --since 2026-08-01 \
-  --until 2026-08-07 \
-  --metric roas \
-  --action-type purchase
 ```
 
-Supported initial comparison metrics:
+Initial descriptive metrics:
 
 ```text
 ctr                 clicks / impressions
@@ -206,30 +180,106 @@ cost_per_action     spend / selected action count
 roas                selected action value / spend
 ```
 
-Reports also preserve `action_rates_per_impression` so users can inspect an
-impression-normalized action rate explicitly instead of overloading the meaning
-of conversion rate.
+Reports also preserve impression-normalized action rates separately. Reach is
+marked non-additive.
 
-## Interpretation rules
+## Experiment layer
 
-The first learning layer is intentionally descriptive.
+See [`EXPERIMENTS.md`](EXPERIMENTS.md) for the full evidence contract.
 
-- Rankings do not claim causal lift.
-- No LLM score is treated as conversion probability.
-- Creatives should be compared over the same measurement window.
-- Meta reach is not additive across ads; summaries expose it as
-  `reported_reach_sum` and explicitly mark `reach_is_additive: false`.
-- Action-rate, CPA, and ROAS comparisons require an explicit platform action
-  type.
-- `action_rate` means actions per click; impression-normalized action rates are
-  separately named.
-- Overlapping windows are stored but never silently summed by the default report.
-- Attribution/reporting-time differences remain visible in each observation.
+A declared experiment snapshots:
 
-This keeps the evidence layer honest while experiment and uncertainty models
-are built.
+```text
+hypothesis
+changed factor
+control exact creative + artifact hash + factor value
+treatment exact creative + artifact hash + factor value
+primary metric
+expected direction
+minimum denominator/events per arm
+confidence level
+```
+
+Create one:
+
+```bash
+adclip performance experiment-create ./campaign \
+  --name "Hook CTR test" \
+  --hypothesis "A contrarian hook increases CTR" \
+  --changed-factor hook \
+  --control-variant v01 \
+  --treatment-variant v02 \
+  --control-value "plain benefit" \
+  --treatment-value "contrarian challenge" \
+  --metric ctr
+```
+
+Evaluate an exact window:
+
+```bash
+adclip performance experiment-evaluate ./campaign \
+  --experiment-id exp_... \
+  --since 2026-08-01 \
+  --until 2026-08-07
+```
+
+Request the next controlled action:
+
+```bash
+adclip performance next-test ./campaign \
+  --experiment-id exp_... \
+  --since 2026-08-01 \
+  --until 2026-08-07
+```
+
+### Evidence semantics
+
+Inferential verdicts are limited to rates with explicit aggregate numerators and
+denominators:
+
+```text
+CTR            clicks / impressions
+outbound CTR   outbound clicks / impressions
+action rate    actions / clicks
+```
+
+Each arm receives a Wilson interval and the treatment-control difference uses a
+Newcombe-style Wilson interval. Both arms must meet the experiment's declared
+minimum denominator and event thresholds before output may say `supported` or
+`contradicted`.
+
+CPA and ROAS remain descriptive because aggregate totals do not provide enough
+variance information for a responsible confidence interval.
+
+Every experiment evaluation currently returns:
+
+```text
+causal_claim: false
+```
+
+A declared single-factor creative difference is not proof that auction,
+audience, placement, timing, attribution, and delivery conditions were
+randomized.
+
+## Next-test behavior
+
+The deterministic evidence planner can return:
+
+```text
+replicate_supported_factor
+revise_changed_factor
+collect_more_evidence
+improve_measurement_design
+replicate_or_extend
+```
+
+It does not invent a new marketing claim from thin evidence. Its job is to
+separate what the observations support from what should be tested next. A later
+abductive planner can propose novel hypotheses on top of this evidence layer.
 
 ## MCP tools
+
+Performance ingestion:
 
 ```text
 adclip_performance_link_meta
@@ -239,18 +289,41 @@ adclip_performance_report
 adclip_performance_compare
 ```
 
-The same application service powers CLI and MCP interfaces.
+Experiments:
+
+```text
+adclip_experiment_create
+adclip_experiments
+adclip_experiment_evaluate
+adclip_experiment_next_test
+```
+
+CLI and MCP share transport-neutral application services.
+
+## Interpretation rules
+
+- Exact windows are compared against exact windows.
+- Overlapping windows are stored but not silently summed.
+- Rankings alone never establish causal lift.
+- Experiment verdicts require declared minimum evidence.
+- CPA/ROAS direction is not statistical significance.
+- Meta reach is not additive across ads.
+- Attribution/reporting-time differences remain visible.
+- Regenerated creative bytes receive new creative identities.
 
 ## Next steps
 
-1. Move campaign/deployment/observation records into SQLite while preserving the
-   portable JSON projection.
-2. Add explicit experiment and hypothesis objects.
-3. Add confidence intervals and minimum-evidence rules for rate comparisons.
-4. Add fatigue analysis over non-overlapping time windows.
-5. Add creative-attribute extraction and changed-factor lineage.
-6. Add Google Ads and TikTok adapters against the same observation schema.
-7. Add ESP/email performance observations.
-8. Add a next-test planner that distinguishes evidence from hypothesis.
-9. Only after the read/learning loop is trustworthy, add draft/paused activation
-   with explicit human authorization.
+1. SQLite-backed campaign/deployment/observation/experiment persistence while
+   retaining portable JSON projections.
+2. Verified randomized-assignment metadata and stronger causal semantics.
+3. Automatic creative-attribute extraction to audit declared single-factor
+   tests.
+4. Experiment-aware generation that locks non-tested factors.
+5. Fatigue/change-point analysis over non-overlapping windows.
+6. Google Ads and TikTok connectors using the same observation schema.
+7. ESP/email performance observations.
+8. Event-level or variance-aware CPA/ROAS inference.
+9. Optional abductive next-test planning grounded in the deterministic evidence
+   result.
+10. Only after the read/learning loop is trustworthy, draft/paused activation
+    with separate explicit human authorization.
