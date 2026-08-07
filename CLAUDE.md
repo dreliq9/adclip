@@ -1,32 +1,70 @@
 # CLAUDE.md — adclip project context
 
-## Standalone product contract
+## Product contract
 
-adclip is a standalone, local-first, model-agnostic marketing creative
-application. MCP is one interface adapter; it is not the application
-architecture.
+adclip is a standalone, local-first, model-routed marketing creative
+application. MCP is one interface adapter; it is not the architecture.
 
-Read `docs/STANDALONE_ARCHITECTURE.md` and `docs/MODEL_PROVIDERS.md` before
-making architectural changes. These rules are binding:
+Read these before architectural changes:
+
+- `docs/STANDALONE_ARCHITECTURE.md`
+- `docs/MODEL_PROVIDERS.md`
+- `docs/MODEL_ROUTING.md`
+
+Binding rules:
 
 - Core/domain/application modules must not import from `adclip.mcp`.
-- CLI, MCP, and future HTTP/UI code are sibling adapters over
-  `AdclipApplication`.
-- New workflows belong in the application layer, not private MCP helpers.
-- Workflow code selects capabilities; it must not branch on vendor or model
-  names.
-- Provider and model are separate values. A provider adapter receives the
-  selected model through its construction context.
-- Provider implementations are selected through registries/capability
-  interfaces rather than transport-specific conditionals.
-- declip, FCP-MCP, youtube-mcp-v2, the Abductive Reasoning Kernel, and platform
-  MCPs are optional enhancements. Baseline workflows may not require them.
-- Existing CLI commands, compatibility flags, MCP tool names, JSON briefs, and
-  campaign-directory exports remain compatible during migration.
+- CLI, MCP, and future HTTP/UI adapters call `AdclipApplication`.
+- Workflows select capabilities and task routes, not vendor names.
+- Route, provider, model, and generation options are separate values.
+- Explicit provider/model values override a route primary.
+- Provider adapters own vendor schemas; application and campaign code do not.
+- Different model families require different request builders. Never restore a
+  universal fal request dictionary.
+- Route fallbacks are exposed metadata. Never silently execute another paid
+  request after a failure.
+- Routes needing unsupported inputs or adapters remain discoverable but must
+  fail clearly until the capability is implemented.
+- Existing CLI aliases, MCP tool names, briefs, and campaign exports remain
+  compatible during migration.
+
+## Current media routing
+
+General image creative routes to fal-hosted `gpt-image-2` at medium quality.
+Text-heavy creative raises quality; bulk work routes to FLUX.2 Pro; drafts use
+Nano Banana 2 Lite; brand-controlled work uses FLUX.2 Flex. Premium image work
+uses the direct OpenAI adapter.
+
+General video routes to Kling O3 Standard. Premium video uses Veo 3.1,
+multi-shot work uses Seedance 2 Fast, and budget work uses Wan 2.6.
+
+Do not promote a route default because a model is fashionable. Run the fixed
+bake-off fixtures and record quality, latency, cost, failures, and human scores.
+
+## Evaluation policy
+
+`adclip bakeoff` is dry-run by default. Paid execution requires `--execute` and
+normal live-API authorization. The harness must record:
+
+```text
+fixture
+route
+provider
+model
+options
+latency
+cost
+artifact SHA-256
+evaluation dimensions
+human score / notes
+```
+
+Keep fixtures stable enough for longitudinal comparison. Add a new fixture only
+when it captures a materially different marketing failure mode.
 
 ## Runtime policy
 
-Runtime modes are controlled by `ADCLIP_RUNTIME_MODE`:
+Runtime modes:
 
 ```text
 online
@@ -36,123 +74,98 @@ air_gapped
 ```
 
 `ADCLIP_ALLOWED_NETWORK_PROVIDERS` controls external access in restricted mode.
-Paid providers still require `ADCLIP_ALLOW_LIVE_APIS=1`.
+Potentially paid providers require `ADCLIP_ALLOW_LIVE_APIS=1`. Loopback text
+inference is allowed offline and air-gapped; external endpoints are not.
 
-Loopback HTTP inference is allowed in offline and air-gapped modes. External
-HTTP endpoints are not. Endpoint-configurable adapters must re-check runtime
-requirements after reading their configured URL.
-
-## Provider and model configuration
-
-Primary configuration:
+## Configuration
 
 ```text
 ADCLIP_TEXT_PROVIDER
 ADCLIP_TEXT_MODEL
+ADCLIP_IMAGE_ROUTE
 ADCLIP_IMAGE_PROVIDER
 ADCLIP_IMAGE_MODEL
+ADCLIP_VIDEO_ROUTE
 ADCLIP_VIDEO_PROVIDER
 ADCLIP_VIDEO_MODEL
 ```
 
-Provider-specific text model variables currently include:
+Provider-specific text settings include:
 
 ```text
 ADCLIP_CLAUDE_MODEL
 ADCLIP_ANTHROPIC_MODEL
 ADCLIP_OPENAI_MODEL
-```
-
-The generic OpenAI-compatible adapter uses:
-
-```text
 ADCLIP_OPENAI_BASE_URL
-ADCLIP_OPENAI_API_KEY       # optional for local endpoints
-ADCLIP_OPENAI_TIMEOUT
+ADCLIP_COMMAND_TEXT_COMMAND
+ADCLIP_COMMAND_TEXT_MODEL
 ```
 
-Do not add a vendor SDK when the standard compatible HTTP contract is
-sufficient. Do not import vendor code into application, campaign, policy,
-scoring, CLI, or MCP modules.
+Direct OpenAI image access uses `ADCLIP_OPENAI_IMAGE_API_KEY` or
+`OPENAI_API_KEY`. Do not add a vendor SDK when a stable HTTP contract is
+sufficient.
 
 ## Built-in text paths
 
-1. **Claude CLI** (`claude-cli`) — subscription-authenticated subprocess.
-   Compatibility default; still an external-network provider.
-2. **MCP sampling** (`sampling`) — delegates to a sampling-capable host. The
-   host controls model selection.
-3. **Direct Anthropic** (`anthropic`) — opt-in paid API adapter.
-4. **OpenAI-compatible** (`openai-compatible`) — generic local or hosted
-   `/v1/chat/completions` endpoint; no SDK dependency.
-5. **Fake** (`fake`) — deterministic in-process test provider.
+1. `claude-cli` — subscription-authenticated compatibility default.
+2. `sampling` — sampling-capable MCP host.
+3. `anthropic` — direct opt-in Anthropic API.
+4. `openai-compatible` — local or hosted `/v1/chat/completions` endpoint.
+5. `command` — local executable over stdin/stdout without a shell.
+6. `fake` — deterministic test provider.
 
-The legacy names `LLMProviderRegistry`, `LLMProviderSpec`,
-`default_llm_registry`, `resolve_llm_provider`, and `llm_*` arguments remain as
-compatibility aliases. New code should use text-provider terminology.
+Legacy `LLM*` names and `llm_*` arguments remain compatibility aliases.
+
+## Media adapters
+
+- fal image: GPT Image 2, Nano Banana, FLUX.2, legacy aliases, raw endpoints
+- direct OpenAI image: GPT Image API through the standard HTTP endpoint
+- fal video: Kling, Veo, Seedance, Wan, legacy aliases, raw endpoints
+- fake image/video: deterministic tests
+
+Reference-image, vector, multi-reference video, image-animation, and existing
+footage-edit routes are cataloged but intentionally non-executable until their
+required input contracts and adapters exist.
 
 ## Vendored declip slice
 
-`src/adclip/_video_backend.py` is a small vendored slice of declip's model
-catalog and loudness logic. It is the only code adclip needs from declip. Do
-not add `declip` as a runtime dependency.
-
-Sync the slice when:
-
-- fal.ai changes the catalog shape;
-- useful new video aliases need coverage;
-- relevant loudness logic improves in declip.
-
-## Billing safety
-
-adclip does not require a paid API on its default path. Do not add keys as a
-workaround for provider-selection errors. A potentially paid provider must be
-explicitly selected and authorized.
-
-A non-loopback OpenAI-compatible endpoint is conservatively treated as
-potentially paid even when no key is configured. This may be relaxed later by
-an explicit provider configuration record, not by guessing from a URL.
+`src/adclip/_video_backend.py` supplies legacy fal aliases and loudness logic.
+It is a compatibility source, not the primary routing policy. Do not add
+`declip` as a runtime dependency.
 
 ## Testing
 
-Use `fake` providers for deterministic workflow tests. Provider tests should
-cover:
+Use fake providers and mocked HTTP. Required coverage includes:
 
-- provider and model selected independently;
-- explicit model overriding provider defaults;
-- compatibility aliases continuing to resolve;
-- local compatible HTTP allowed offline;
-- external compatible HTTP blocked offline;
-- external potentially paid endpoints requiring authorization;
-- CLI importing no module under `adclip.mcp`;
-- MCP forwarding provider and model without vendor conditionals;
-- image and video model overrides reaching their adapters.
+- provider/model independence and compatibility aliases;
+- task-route recommendation and explicit overrides;
+- non-executable route rejection;
+- family-specific request schemas for GPT Image, Nano Banana, FLUX, Kling,
+  Veo, Seedance, and Wan;
+- direct OpenAI image response handling;
+- offline/air-gapped provider policy;
+- unused media providers not being resolved;
+- run-level route/provider/model provenance;
+- dry-run bake-off making no provider call;
+- CLI importing no module under `adclip.mcp`.
 
-Use mocked HTTP for the OpenAI-compatible adapter. Do not require a running
-model server in the unit suite.
-
-## Common errors
-
-- `requires network access outside loopback`: an external provider was selected
-  in offline or air-gapped mode.
-- `may incur paid API charges`: set `ADCLIP_ALLOW_LIVE_APIS=1` only when use is
-  intentional.
-- `requires an MCP session`: sampling was selected outside an appropriate host.
-- `requires an explicit model`: pass `--model`/`--text-model` or configure
-  `ADCLIP_TEXT_MODEL`.
-- `requires ADCLIP_OPENAI_BASE_URL`: configure the compatible HTTP API base.
-- `claude CLI failed`: check the executable and subscription auth.
+Do not require a live model server or paid API in the unit suite.
 
 ## Current scope
 
 - Static, text, and 9:16 video creative
 - Policy, healing, semantic review, and judging
 - Transport-neutral `AdclipApplication`
-- Provider-neutral text contract and registry
-- Independent text/image/video model selection
-- Local or hosted OpenAI-compatible text inference
-- Explicit runtime and paid-provider policy
-- Standalone CLI and full MCP surface
+- Model-agnostic text provider registry
+- Task-oriented image and video route catalog
+- Direct OpenAI image adapter
+- Schema-aware fal image and video adapters
+- Local HTTP and command-based text inference
+- Recurring media bake-off harness
+- Run-level route/provider/model provenance
+- Standalone CLI and fourteen MCP tools
 
-The next standalone milestone remains S1: SQLite persistence,
-content-addressed artifacts, stable IDs/Manifest v2, and durable resumable
-jobs. Provider/model identity must become persistent provenance in that work.
+The next standalone milestone is S1: SQLite persistence, content-addressed
+artifacts, stable IDs/Manifest v2, and durable resumable jobs. Route selection,
+endpoint class, prompt version, generation parameters, cost, and artifact
+hashes must become authoritative per-asset provenance.

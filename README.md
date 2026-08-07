@@ -2,25 +2,47 @@
 
 <!-- mcp-name: io.github.dreliq9/adclip -->
 
-**Generate ad creative from a single JSON brief.** adclip is a standalone,
-model-agnostic ad creative engine and MCP server that turns a structured brief
-into ad copy, static images, and short-form video across Meta, Google,
-LinkedIn, X, TikTok, and YouTube formats. Self-review loops filter for policy
-violations and score variants before export.
+**A standalone, model-routed marketing creative engine.** adclip turns a
+structured campaign brief into policy-checked copy, static images, and
+short-form video across Meta, Google, LinkedIn, X, TikTok, and YouTube formats.
+It can be used through its CLI, MCP server, and future local web workbench.
 
-The CLI and MCP server are sibling interfaces over the same application layer.
-Core workflows do not require an MCP host, a particular model vendor, or
-another Adam Engineering project. See
-[`docs/STANDALONE_ARCHITECTURE.md`](docs/STANDALONE_ARCHITECTURE.md) for the
-local-first product contract and
-[`docs/MODEL_PROVIDERS.md`](docs/MODEL_PROVIDERS.md) for the provider/model
-extension contract.
+adclip separates four concerns that are often conflated:
 
-The compatibility default uses the `claude` CLI and its subscription auth, but
-text provider and model are independent selections. Local commands, local or
-hosted OpenAI-compatible endpoints, direct Anthropic, MCP sampling, and
-deterministic test providers use the same workflow contract. Paid third-party
-providers are opt-in and gated behind `ADCLIP_ALLOW_LIVE_APIS=1`.
+```text
+creative task -> route -> provider adapter -> model + generation options
+```
+
+That means a campaign can ask for a **text-heavy image**, a **bulk draft**, or a
+**premium video** without hard-coding one vendor throughout the workflow. The
+route catalog selects a current primary and exposes ordered fallbacks; explicit
+provider/model overrides remain authoritative.
+
+See:
+
+- [`docs/STANDALONE_ARCHITECTURE.md`](docs/STANDALONE_ARCHITECTURE.md)
+- [`docs/MODEL_PROVIDERS.md`](docs/MODEL_PROVIDERS.md)
+- [`docs/MODEL_ROUTING.md`](docs/MODEL_ROUTING.md)
+
+## Current default routes
+
+| Modality | Route | Primary | Purpose |
+| --- | --- | --- | --- |
+| Image | `general` | fal / `gpt-image-2` medium | General marketing creative, layout, and typography |
+| Image | `text-heavy` | fal / `gpt-image-2` high | Posters, diagrams, packaging, and readable in-image text |
+| Image | `bulk` | fal / `flux-2-pro` | Cost-controlled production batches |
+| Image | `draft` | fal / `nano-banana-2-lite` | Fast concept exploration |
+| Image | `brand-control` | fal / `flux-2-flex` | Controlled palettes and design-system work |
+| Image | `premium` | direct OpenAI / `gpt-image-2` high | Highest-quality general render |
+| Video | `general` | fal / `kling-o3-standard` | Practical social and performance-ad video |
+| Video | `premium` | fal / `veo-3.1` | Cinematic output with native audio |
+| Video | `multi-shot` | fal / `seedance-2-fast` | Directed multi-shot storytelling |
+| Video | `budget` | fal / `wan-2.6` | Lower-cost video exploration |
+
+Reference-image editing, vector generation, image-to-video, multi-reference
+video, and footage editing are already cataloged as routes. They fail clearly
+until the required inputs or provider adapters are implemented rather than
+pretending the current brief schema can support them.
 
 ## What a run looks like
 
@@ -44,12 +66,9 @@ Brief in (`examples/taichi_brief.json`):
 }
 ```
 
-Out:
-
-- 2 × `meta_feed_4x5` composites (1080×1350, headline + body + CTA burned in)
-- 2 × `google_rsa` text variants
-- `manifest.json` with per-variant costs, policy flags, judge scores, and rationales
-- A campaign directory ready for `adclip_export_dco` modular Meta export
+A run produces a portable campaign directory containing the original brief,
+copy, raw media, rendered assets, rejected candidates, costs, scores, and the
+selected route/provider/model provenance.
 
 ## Install
 
@@ -57,17 +76,15 @@ Out:
 pipx install adclip
 ```
 
-Python 3.11+ is required. Install the Claude CLI only when using the
-`claude-cli` compatibility default. The generic OpenAI-compatible and command
-adapters have no additional Python dependency.
-
-For the optional direct-Anthropic-API provider:
+Python 3.11+ is required. The default text path uses the Claude CLI subscription
+if installed. Local command and OpenAI-compatible text providers require no
+additional Python SDK. Direct Anthropic remains optional:
 
 ```bash
 pipx install "adclip[anthropic]"
 ```
 
-### From source
+From source:
 
 ```bash
 git clone https://github.com/dreliq9/adclip.git
@@ -78,77 +95,140 @@ python3.11 -m venv .venv
 
 ## Standalone CLI
 
-The CLI calls the application layer directly; it does not start or import the
-MCP server.
-
 ```bash
-adclip status                               # runtime + configured models
-adclip formats                              # format specs
-adclip estimate examples/taichi_brief.json  # cost preview
-adclip copy examples/taichi_brief.json      # copy only
-adclip run examples/taichi_brief.json --image fake
+adclip status
+adclip formats
+adclip routes
+adclip routes --modality image
+adclip route-recommend image --text-heavy
+adclip estimate examples/taichi_brief.json
+adclip copy examples/taichi_brief.json
+adclip run examples/taichi_brief.json --image-provider fake
 ```
 
-Provider and model can be selected independently:
+### Route-driven generation
 
 ```bash
-adclip copy examples/taichi_brief.json \
-  --provider openai-compatible \
-  --model qwen2.5:14b
+# Current general defaults: GPT Image 2 through fal + Kling O3 through fal
+adclip run brief.json
 
-adclip run examples/taichi_brief.json \
-  --text-provider openai-compatible \
-  --text-model qwen2.5:14b \
-  --image-provider fal \
-  --image-model imagen-3 \
+# Explicit task routes
+adclip run brief.json \
+  --image-route text-heavy \
+  --video-route premium
+
+# Explicit values override route primaries
+adclip run brief.json \
+  --image-route general \
+  --image-provider openai \
+  --image-model gpt-image-2 \
+  --video-route budget \
   --video-provider fal \
-  --video-model veo-3.1
+  --video-model wan-2.6
 ```
 
-The former flags remain as aliases: `--llm`, `--llm-model`, `--image`, and
-`--video`.
+The compatibility flags remain:
 
-### Local inference
+```text
+--llm          -> --text-provider
+--llm-model    -> --text-model
+--image        -> --image-provider
+--video        -> --video-provider
+```
 
-Any local service implementing `/v1/chat/completions` can supply text
-generation:
+## Recurring model bake-off
+
+Model defaults should be promoted by evidence rather than reputation. adclip
+ships fixed image and video marketing fixtures covering typography, realism,
+brand color, package fidelity, product stability, audio, and multi-shot
+continuity.
+
+A bake-off is a **dry run by default**:
+
+```bash
+adclip bakeoff \
+  --modality image \
+  --routes general,text-heavy,bulk,draft \
+  --output-dir ./image-bakeoff
+```
+
+This writes `plan.json` without calling a paid provider. Execution requires an
+additional flag and still passes through the live-API authorization gate:
+
+```bash
+ADCLIP_ALLOW_LIVE_APIS=1 adclip bakeoff \
+  --modality image \
+  --routes general,text-heavy,bulk \
+  --repetitions 3 \
+  --execute \
+  --output-dir ./image-bakeoff
+```
+
+The result records provider, model, route options, latency, estimated cost,
+artifact SHA-256, evaluation dimensions, and placeholders for human scoring.
+No automatic paid fallback is performed.
+
+## Text providers
+
+| Provider | Model behavior | Runtime |
+| --- | --- | --- |
+| `default` / `claude-cli` | Explicit model or `ADCLIP_CLAUDE_MODEL`; default `sonnet` | External through Claude CLI |
+| `openai-compatible` | Explicit model required | Local loopback or external compatible HTTP |
+| `command` | Any local executable reading stdin and writing stdout | Offline and air-gapped capable |
+| `sampling` | Host selects model | Sampling-capable MCP host required |
+| `anthropic` | Explicit model or `ADCLIP_ANTHROPIC_MODEL` | External and potentially paid |
+| `fake` | Deterministic identity | In-process testing |
+
+### Local HTTP inference
 
 ```bash
 export ADCLIP_TEXT_PROVIDER=openai-compatible
 export ADCLIP_TEXT_MODEL=qwen2.5:14b
 export ADCLIP_OPENAI_BASE_URL=http://127.0.0.1:11434/v1
 export ADCLIP_RUNTIME_MODE=offline
-
-adclip copy examples/taichi_brief.json
+adclip copy brief.json
 ```
 
-A local model CLI can be used without an HTTP server:
+### Local command inference
 
 ```bash
 export ADCLIP_TEXT_PROVIDER=command
 export ADCLIP_COMMAND_TEXT_COMMAND='my-model-cli --model {model} --json'
 export ADCLIP_COMMAND_TEXT_MODEL=my-local-model
 export ADCLIP_RUNTIME_MODE=air_gapped
-
-adclip copy examples/taichi_brief.json
+adclip copy brief.json
 ```
 
-The command reads the prompt from stdin and writes the response to stdout;
-adclip does not invoke a shell.
+The command provider sends the prompt through stdin, reads stdout, and never
+invokes a shell.
 
-Loopback inference is allowed in `offline` and `air_gapped` modes. A
-non-loopback compatible endpoint is treated as external and potentially paid,
-so normal network and billing authorization applies.
+## Media providers and models
 
-Connectivity can otherwise be constrained explicitly:
+Primary configuration:
 
-```bash
-ADCLIP_RUNTIME_MODE=restricted_network \
-ADCLIP_ALLOWED_NETWORK_PROVIDERS=claude-cli adclip status
+```text
+ADCLIP_IMAGE_ROUTE
+ADCLIP_IMAGE_PROVIDER
+ADCLIP_IMAGE_MODEL
+ADCLIP_VIDEO_ROUTE
+ADCLIP_VIDEO_PROVIDER
+ADCLIP_VIDEO_MODEL
 ```
 
-Supported modes are `online`, `restricted_network`, `offline`, and
-`air_gapped`. Paid providers still require `ADCLIP_ALLOW_LIVE_APIS=1`.
+Image providers:
+
+- `fal`: GPT Image 2, Nano Banana, FLUX.2, legacy aliases, and raw fal endpoints
+- `openai`: first-party GPT Image API
+- `fake`: deterministic test image
+
+Video providers:
+
+- `fal`: Kling O3/3, Veo 3.1, Seedance 2, Wan 2.6, legacy aliases, raw endpoints
+- `fake`: deterministic test video
+
+Each supported fal model family has its own request builder. adclip does not
+assume that GPT Image, Nano Banana, FLUX, Kling, Veo, Seedance, and Wan share a
+single request schema.
 
 ## MCP usage
 
@@ -164,41 +244,22 @@ Add to `.mcp.json` or `~/.claude.json`:
 }
 ```
 
-Then ask the host to generate variants from a brief. MCP generation,
-visual-only, regeneration, scoring, and judging paths accept separate provider
-and model arguments for every modality they invoke.
-
-### The three tools used most
-
-- `adclip_generate_variants` — brief → copy → policy → media → render
-- `adclip_generate_copy` — inexpensive copy-pool iteration
-- `adclip_export_dco` — Meta modular-component export
-
-<details>
-<summary>All 12 tools</summary>
-
-**Brief + inspection**
+The MCP surface contains the original campaign tools plus route discovery:
 
 - `adclip_brief_validate`
 - `adclip_estimate_cost`
 - `adclip_list_formats`
+- `adclip_list_media_routes`
+- `adclip_recommend_media_route`
 - `adclip_policy_check`
-- `adclip_campaign_status`
-
-**Generation**
-
 - `adclip_generate_copy`
 - `adclip_generate_visuals`
 - `adclip_generate_variants`
-
-**Iteration**
-
 - `adclip_render_variant`
 - `adclip_regenerate`
 - `adclip_score_variants`
+- `adclip_campaign_status`
 - `adclip_export_dco`
-
-</details>
 
 ## Formats
 
@@ -211,65 +272,30 @@ and model arguments for every modality they invoke.
 | `linkedin_single` | 1.91:1 | 1200×627 | static |
 | `x_promoted` | 16:9 | 1200×675 | static |
 | `google_rsa` | text | — | text |
-| `stories_reels_9x16` | 9:16 | 1080×1920 | video¹ |
-| `tiktok_9x16` | 9:16 | 1080×1920 | video¹ |
-| `youtube_shorts_9x16` | 9:16 | 1080×1920 | video¹ |
+| `stories_reels_9x16` | 9:16 | 1080×1920 | video |
+| `tiktok_9x16` | 9:16 | 1080×1920 | video |
+| `youtube_shorts_9x16` | 9:16 | 1080×1920 | video |
 
-¹ The current production video adapter uses fal.ai and then burns headline and
-CTA overlays with FFmpeg. Select its model with `--video-model` or
-`ADCLIP_VIDEO_MODEL`. Use `--video-provider fake` in tests.
+## Runtime and billing safety
 
-## Text providers
-
-| Provider | Key | Model behavior |
-| --- | --- | --- |
-| `default` / `claude-cli` | none | Explicit model or `ADCLIP_CLAUDE_MODEL`; default `sonnet` |
-| `openai-compatible` | optional | Explicit model required; local or hosted `/v1/chat/completions` |
-| `command` | none | Any local executable reading stdin and writing stdout |
-| `sampling` | none | Model selected by the sampling-capable MCP host |
-| `anthropic` | key + live-API authorization | Explicit model or `ADCLIP_ANTHROPIC_MODEL` |
-| `fake` | none | Deterministic test output |
-
-Global configuration uses `ADCLIP_TEXT_PROVIDER` and `ADCLIP_TEXT_MODEL`.
-Provider metadata declares model override support, structured-output behavior,
-network scope, paid-API risk, and host-session requirements. Interface modules
-do not contain vendor resolver branches.
-
-## Media providers
-
-The current image and video production provider is `fal`; `fake` is the local
-test provider. Provider and model are separate in application, CLI, and MCP
-contracts:
+Supported modes:
 
 ```text
-ADCLIP_IMAGE_PROVIDER
-ADCLIP_IMAGE_MODEL
-ADCLIP_VIDEO_PROVIDER
-ADCLIP_VIDEO_MODEL
+online
+restricted_network
+offline
+air_gapped
 ```
 
-The image adapter accepts friendly aliases such as `flux-dev` and `imagen-3`,
-as well as raw fal endpoints such as `fal-ai/vendor/custom-model`. The video
-adapter similarly accepts its catalog aliases or raw endpoints.
+Loopback inference is allowed offline. External providers are refused in
+offline and air-gapped modes. Potentially paid providers require:
 
-When a second production media provider is added, it should register behind the
-same binding contract rather than adding campaign-level conditionals.
+```bash
+ADCLIP_ALLOW_LIVE_APIS=1
+```
 
-## Self-review loops
-
-- **Judge** (`use_judge: true`) scores survivors on brief fit and copy quality.
-- **Heal** (`heal_violations: N`) rewrites policy-violating candidates.
-- **Semantic policy** (`use_semantic_policy: true`) checks paraphrases missed by
-  literal rules.
-
-These workflows consume the neutral text-generation contract and therefore use
-the selected provider/model rather than a hard-coded vendor.
-
-## Live-API opt-in
-
-`ADCLIP_ALLOW_LIVE_APIS=1` must be set before any potentially paid provider is
-invoked. Provider-side billing gates remain as defense in depth. Merely having
-a key in the environment is not authorization.
+Fallbacks are metadata, not an instruction to spend again automatically. A
+caller must deliberately select or authorize another target.
 
 ## Tests
 
@@ -279,9 +305,9 @@ a key in the environment is not authorization.
 
 ## Status
 
-The current standalone foundation includes a transport-neutral application
-layer, provider/model separation, local OpenAI-compatible and command-based
-text inference, selectable image and video models, explicit runtime modes,
-twelve MCP tools, and CLI access. SQLite persistence, durable jobs,
-BrandKit/SourceLibrary, and the local browser workbench are the next standalone
-milestones.
+The standalone foundation now includes a transport-neutral application layer,
+model-agnostic text providers, task-oriented image/video routes, direct OpenAI
+image access, schema-aware fal adapters, run-level model provenance, a
+repeatable bake-off harness, fourteen MCP tools, and CLI access. SQLite,
+durable jobs, BrandKit/SourceLibrary, platform performance feedback, and the
+local browser workbench remain the next major milestones.

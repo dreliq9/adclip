@@ -3,58 +3,60 @@
 **Status:** Active contract  
 **Date:** 2026-08-07
 
-adclip treats a provider and a model as separate selections:
+adclip treats task, route, provider, model, and generation options as separate
+concepts:
 
 ```text
-workflow -> capability -> provider adapter -> model ID
+workflow -> creative task -> route -> provider adapter -> model + options
 ```
 
-Campaign, policy, scoring, and interface code must not branch on vendor or
-model names. Provider adapters implement neutral capabilities and advertise
-runtime requirements and model-override support.
+Campaign, policy, scoring, and interface code must not branch on model vendors.
+Provider adapters implement neutral capabilities, advertise runtime
+requirements, and translate neutral requests into vendor-specific schemas.
+Route selection is documented separately in `docs/MODEL_ROUTING.md`.
 
 ## Configuration precedence
 
-Text provider selection uses:
+Text provider selection:
 
 1. explicit CLI/MCP/application argument;
 2. `ADCLIP_TEXT_PROVIDER`;
 3. compatibility default `claude-cli`.
 
-Text model selection uses:
+Text model selection:
 
-1. explicit `--model`, `--text-model`, or MCP model argument;
+1. explicit `--model`, `--text-model`, or MCP argument;
 2. provider-specific model environment variable;
 3. `ADCLIP_TEXT_MODEL`;
 4. provider default.
 
-Media follows the same separation:
+Media selection:
 
 ```text
+ADCLIP_IMAGE_ROUTE
 ADCLIP_IMAGE_PROVIDER
 ADCLIP_IMAGE_MODEL
+ADCLIP_VIDEO_ROUTE
 ADCLIP_VIDEO_PROVIDER
 ADCLIP_VIDEO_MODEL
 ```
 
-The same selection contract now applies to full generation, visual-only
-generation, variant regeneration, and LLM-based variant judging.
+An explicit provider/model overrides the selected route primary. Route options
+remain unless the explicit model is unrelated to the route target, in which
+case only explicitly supplied options should be assumed.
 
 ## Built-in text adapters
 
 | Provider | Model selection | Runtime |
 | --- | --- | --- |
-| `claude-cli` | `ADCLIP_CLAUDE_MODEL` or explicit model | External network through the Claude CLI |
-| `sampling` | Host-selected | Requires a sampling-capable MCP session |
+| `claude-cli` | `ADCLIP_CLAUDE_MODEL` or explicit model | External through Claude CLI |
+| `sampling` | Host-selected | Sampling-capable MCP session |
 | `anthropic` | `ADCLIP_ANTHROPIC_MODEL` or explicit model | External, potentially paid |
-| `openai-compatible` | Required explicit/configured model | Local loopback or external compatible endpoint |
-| `command` | `ADCLIP_COMMAND_TEXT_MODEL` or explicit model | Local subprocess; allowed air-gapped |
-| `fake` | Any identity accepted for deterministic tests | In-process |
+| `openai-compatible` | Required explicit/configured model | Local loopback or external compatible HTTP |
+| `command` | `ADCLIP_COMMAND_TEXT_MODEL` or explicit model | Local subprocess, air-gapped capable |
+| `fake` | Arbitrary deterministic identity | In-process |
 
-### OpenAI-compatible HTTP
-
-The `openai-compatible` adapter uses the HTTP contract directly and does not
-require a vendor SDK. Configure it with:
+### OpenAI-compatible text
 
 ```bash
 ADCLIP_TEXT_PROVIDER=openai-compatible
@@ -63,116 +65,111 @@ ADCLIP_OPENAI_BASE_URL=http://127.0.0.1:11434/v1
 ADCLIP_RUNTIME_MODE=offline
 ```
 
-The base URL may point to any server or gateway implementing
-`/v1/chat/completions`. `ADCLIP_OPENAI_API_KEY` is optional for loopback
-servers. A non-loopback endpoint is treated as external and potentially paid,
-so it requires normal runtime authorization.
+The adapter speaks `/v1/chat/completions` directly and has no OpenAI SDK
+dependency. A non-loopback endpoint is treated as external and potentially paid.
 
-### Generic local command
-
-The `command` adapter supports local model CLIs that do not expose HTTP:
+### Local command text
 
 ```bash
-export ADCLIP_TEXT_PROVIDER=command
-export ADCLIP_COMMAND_TEXT_COMMAND='my-model-cli --model {model} --json'
-export ADCLIP_COMMAND_TEXT_MODEL=my-local-model
-export ADCLIP_RUNTIME_MODE=air_gapped
+ADCLIP_TEXT_PROVIDER=command
+ADCLIP_COMMAND_TEXT_COMMAND='my-model-cli --model {model} --json'
+ADCLIP_COMMAND_TEXT_MODEL=my-local-model
+ADCLIP_RUNTIME_MODE=air_gapped
 ```
 
-The executable receives the prompt on stdin and must write the raw response to
-stdout. adclip never invokes a shell. Individual command arguments may contain
-`{model}` and `{n}` placeholders; the same values are available in
-`ADCLIP_MODEL` and `ADCLIP_CANDIDATE_COUNT`.
+The prompt is sent over stdin and the raw response is read from stdout. adclip
+never invokes a shell.
 
-## CLI examples
+## Image adapters
 
-```bash
-# Local OpenAI-compatible text generation
-adclip copy brief.json \
-  --provider openai-compatible \
-  --model qwen2.5:14b
+### fal
 
-# Choose each modality independently
-adclip run brief.json \
-  --text-provider openai-compatible \
-  --text-model qwen2.5:14b \
-  --image-provider fal \
-  --image-model imagen-3 \
-  --video-provider fal \
-  --video-model veo-3.1
-```
+The fal image adapter supports current aliases for:
 
-Compatibility flags remain available:
+- GPT Image 2
+- Nano Banana 2, Pro, and Lite
+- FLUX.2 base, Pro, Flex, and Max
+- legacy FLUX/Imagen aliases
+- raw fal endpoint IDs
 
-```text
---llm          -> --text-provider
---llm-model    -> --text-model
---image        -> --image-provider
---video        -> --video-provider
-```
+The adapter is schema-aware. GPT Image uses custom pixel dimensions and quality;
+Nano Banana uses aspect ratio and resolution; FLUX uses pixel dimensions and
+inference controls. Do not collapse these into one request dictionary.
 
-## Media model IDs
+### direct OpenAI
 
-The fal image adapter accepts both friendly aliases and raw endpoint IDs:
+The direct OpenAI adapter calls `/v1/images/generations`, accepts GPT Image model
+IDs, and handles base64 or URL results. It uses the normal live-API gate and
+`ADCLIP_OPENAI_IMAGE_API_KEY` or `OPENAI_API_KEY`.
 
-```text
-flux-dev
-imagen-3
-fal-ai/vendor/custom-image-model
-```
+### fake
 
-The video adapter already accepts aliases and raw endpoints through its model
-catalog resolver. Unknown-model pricing remains conservative until the model
-cost registry is introduced.
+The fake image provider is deterministic and intended for tests.
+
+## Video adapters
+
+The fal video adapter supports current aliases for:
+
+- Kling O3 Standard and Kling 3 Standard
+- Veo 3.1 and Veo 3.1 Fast
+- Seedance 2 Standard, Fast, and reference endpoint
+- Wan 2.6
+- legacy aliases and raw endpoints
+
+Each family has a distinct request builder. Supported durations, resolution,
+aspect ratios, audio flags, reference fields, and shot controls are normalized
+before submission.
+
+The fake video provider remains deterministic for tests. Runway, Recraft, local
+FLUX, and other providers are represented in the route catalog where useful,
+but are not advertised as executable until their adapters exist.
 
 ## Runtime policy
 
 Loopback inference is not equivalent to external network access. Local HTTP
 model servers are allowed in `offline` and `air_gapped` modes. External
-endpoints are refused in those modes. In `restricted_network`, external
-providers require an allowlist entry.
+endpoints are refused. Local command providers require no network access.
+Potentially paid providers require `ADCLIP_ALLOW_LIVE_APIS=1`.
 
-Local command providers require no network access. Provider adapters whose
-endpoints are configurable must re-evaluate runtime requirements after reading
-their endpoint. Static registry metadata alone is not sufficient.
+## Adapter extension contract
 
-## Extension contract
+A new adapter must:
 
-A new text adapter should:
+1. implement the neutral capability contract;
+2. register lazily;
+3. declare runtime and billing requirements;
+4. accept model/options independently when supported;
+5. isolate vendor schema translation inside the adapter;
+6. avoid imports from CLI, MCP, campaign, policy, or scoring modules;
+7. return provider/model/cost information suitable for provenance;
+8. provide deterministic mocked tests.
 
-1. implement `TextGenerationProvider.generate(prompt, n)`;
-2. register a lazy `TextProviderSpec` factory;
-3. declare capabilities and runtime requirements;
-4. accept a model through `TextProviderContext` when model override is
-   supported;
-5. avoid imports from CLI, MCP, or application modules;
-6. return text only—the workflow owns prompt and schema semantics.
+Adding a provider must not require campaign-level conditionals.
 
-Future structured-generation work may expand the neutral contract, but legacy
-`generate(prompt, n)` support must remain through an adapter until a versioned
-migration exists.
+## Fallback policy
 
-Image and video adapters currently use callable `MediaProviderBinding` objects
-with provider/model metadata. They should migrate to the same registry pattern
-when a second production provider is added; campaign code must not be changed
-to add that provider.
+Routes expose ordered fallback targets, but adclip does not automatically run a
+fallback after a failed paid call. The application may later support an
+explicitly authorized retry budget, but fallback execution must remain visible,
+auditable, and bounded.
 
-## Provenance requirement
+## Provenance
 
-Every durable generation record must eventually contain:
+Current campaign manifests persist route/provider/model/options at run level.
+Durable generation records must eventually contain:
 
 ```text
+route
 provider
 model
-endpoint class (loopback/external/host session)
-prompt version
+endpoint class
+prompt and prompt version
 seed
 generation parameters
-cost estimate and actual cost
+estimated and actual cost
+latency
+failure/retry history
 artifact hash
 ```
 
-Current full-generation and visual-only campaign manifests persist the selected
-provider/model identities at run level. Regeneration and model-based judging
-return the selected identities to their callers. Manifest v2 and durable jobs
-will extend this into authoritative per-asset lineage in milestone S1.
+Manifest v2 and durable jobs will make this authoritative per asset in S1.
