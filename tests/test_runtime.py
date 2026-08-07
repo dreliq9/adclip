@@ -5,6 +5,7 @@ from adclip.runtime import ProviderRequirements, RuntimeMode, RuntimePolicy
 
 def test_runtime_mode_coerce():
     assert RuntimeMode.coerce("offline") is RuntimeMode.OFFLINE
+    assert RuntimePolicy(mode="offline").mode is RuntimeMode.OFFLINE
     with pytest.raises(ValueError, match="Unknown ADCLIP_RUNTIME_MODE"):
         RuntimeMode.coerce("nope")
 
@@ -29,6 +30,18 @@ def test_paid_provider_requires_explicit_authorization():
     policy = RuntimePolicy(mode=RuntimeMode.ONLINE, allow_paid_apis=False)
     with pytest.raises(RuntimeError, match="paid API charges"):
         policy.check_provider("paid", ProviderRequirements(paid_api=True))
+
+
+def test_air_gapped_always_blocks_host_session():
+    policy = RuntimePolicy(
+        mode=RuntimeMode.AIR_GAPPED,
+        allow_host_sessions=True,
+    )
+    with pytest.raises(RuntimeError, match="requires a host session"):
+        policy.check_provider(
+            "sampling",
+            ProviderRequirements(host_session=True),
+        )
 
 
 def test_runtime_policy_from_env(monkeypatch):

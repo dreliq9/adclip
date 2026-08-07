@@ -45,10 +45,10 @@ is small, fully exercised, and easy to keep in sync.
 
 ## No API key, by construction
 
-adclip never requires `ANTHROPIC_API_KEY`. Any runtime error mentioning a
-missing key means the wrong provider got instantiated. **Do not add the key as
-a workaround.** Do not rewrite the LLM layer to make a paid provider the
-default.
+adclip never requires `ANTHROPIC_API_KEY` on its default path. Any runtime
+error mentioning a missing key means the direct paid provider was selected.
+**Do not add the key as a workaround.** Do not rewrite the LLM layer to make a
+paid provider the default.
 
 ## The three production LLM provider paths
 

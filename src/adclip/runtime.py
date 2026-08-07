@@ -56,6 +56,14 @@ class RuntimePolicy:
     allow_paid_apis: bool = False
     allow_host_sessions: bool = True
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "mode", RuntimeMode.coerce(self.mode))
+        object.__setattr__(
+            self,
+            "allowed_network_providers",
+            frozenset(self.allowed_network_providers),
+        )
+
     @classmethod
     def from_env(cls) -> RuntimePolicy:
         mode = RuntimeMode.coerce(None)
@@ -88,7 +96,9 @@ class RuntimePolicy:
     ) -> None:
         """Raise ``RuntimeError`` when a provider violates this policy."""
 
-        if requirements.host_session and not self.allow_host_sessions:
+        if requirements.host_session and (
+            self.mode is RuntimeMode.AIR_GAPPED or not self.allow_host_sessions
+        ):
             raise RuntimeError(
                 f"Provider {provider_name!r} requires a host session, but host "
                 f"sessions are disabled in runtime mode {self.mode.value!r}."
