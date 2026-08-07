@@ -1,8 +1,8 @@
 """Explicit creative experiments, evidence thresholds, and next-test guidance.
 
-This layer intentionally separates a declared hypothesis from observed platform
-performance. Rate metrics can receive confidence intervals when their
-numerators/denominators are available. Value metrics such as ROAS and CPA stay
+This layer separates declared hypotheses from observed platform performance.
+Rate metrics can receive confidence intervals when their aggregate
+numerators/denominators are suitable. Value metrics such as ROAS and CPA stay
 descriptive until richer variance or event-level evidence exists.
 """
 
@@ -22,7 +22,6 @@ from adclip.performance.schema import PerformanceObservation, utc_now
 from adclip.performance.store import (
     campaign_manifest,
     find_creative_entry,
-    load_observations,
     performance_dir,
 )
 
@@ -81,7 +80,7 @@ class ExperimentRecord(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _validate_experiment(self) -> ExperimentRecord:
+    def _validate_experiment(self) -> "ExperimentRecord":
         if self.control.role != "control" or self.treatment.role != "treatment":
             raise ValueError("experiment arms must preserve control/treatment roles")
         if self.control.creative_id == self.treatment.creative_id:
@@ -116,7 +115,11 @@ def experiment_id_for(
     changed_factor: str,
     primary_metric: str,
     action_type: str | None,
+    control_factor_value: str | None = None,
+    treatment_factor_value: str | None = None,
 ) -> str:
+    """Create a deterministic experiment ID including declared factor values."""
+
     identity = uuid.uuid5(
         uuid.NAMESPACE_URL,
         ":".join(
@@ -127,6 +130,8 @@ def experiment_id_for(
                 control_creative_id,
                 treatment_creative_id,
                 changed_factor,
+                control_factor_value or "",
+                treatment_factor_value or "",
                 primary_metric,
                 action_type or "",
             ]
@@ -154,9 +159,13 @@ def load_experiments(campaign_dir: str | Path) -> list[ExperimentRecord]:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise ValueError(f"{path} is not valid JSON: {exc}") from exc
-    if not isinstance(payload, dict) or not isinstance(payload.get("experiments", []), list):
+    if not isinstance(payload, dict) or not isinstance(
+        payload.get("experiments", []), list
+    ):
         raise ValueError(f"{path} must contain an 'experiments' array")
-    return [ExperimentRecord.model_validate(item) for item in payload["experiments"]]
+    return [
+        ExperimentRecord.model_validate(item) for item in payload["experiments"]
+    ]
 
 
 def write_experiments(
@@ -184,13 +193,30 @@ def upsert_experiment(
     experiment: ExperimentRecord,
 ) -> ExperimentRecord:
     current = {item.id: item for item in load_experiments(campaign_dir)}
+    prior = current.get(experiment.id)
+    if prior is not None:
+        prior_factor_values = (
+            prior.control.factor_value,
+            prior.treatment.factor_value,
+        )
+        new_factor_values = (
+            experiment.control.factor_value,
+            experiment.treatment.factor_value,
+        )
+        if prior_factor_values != new_factor_values:
+            raise ValueError(
+                "experiment identity collision with different factor values; "
+                "refusing to overwrite the earlier experiment"
+            )
     current[experiment.id] = experiment
     write_experiments(campaign_dir, list(current.values()))
     return experiment
 
 
 def get_experiment(campaign_dir: str | Path, experiment_id: str) -> ExperimentRecord:
-    matches = [item for item in load_experiments(campaign_dir) if item.id == experiment_id]
+    matches = [
+        item for item in load_experiments(campaign_dir) if item.id == experiment_id
+    ]
     if not matches:
         raise ValueError(f"Experiment not found: {experiment_id}")
     return matches[0]
@@ -287,9 +313,9 @@ def _wilson_interval(
     denominator: float,
     confidence_level: float,
 ) -> tuple[float, float] | None:
-    if denominator <= 0:
+    if denominator <= 0 or events < 0 or events > denominator:
         return None
-    proportion = max(0.0, min(1.0, events / denominator))
+    proportion = events / denominator
     z = NormalDist().inv_cdf(0.5 + confidence_level / 2.0)
     z2 = z * z
     base = 1.0 + z2 / denominator
@@ -327,6 +353,11 @@ def _minimum_evidence(
             shortfalls.append(
                 f"{label} events {events:g} < {thresholds.min_events_per_arm}"
             )
+        if events > denominator:
+            shortfalls.append(
+                f"{label} events {events:g} exceed denominator {denominator:g}; "
+                "binomial rate inference is not valid"
+            )
     return {"met": not shortfalls, "shortfalls": shortfalls}
 
 
@@ -343,114 +374,11 @@ def _same_measurement_context(
     return not problems, problems
 
 
-def evaluate_experiment(
+def _rate_evidence(
     experiment: ExperimentRecord,
-    observations: list[PerformanceObservation],
-    *,
-    since: date,
-    until: date,
-) -> dict[str, object]:
-    selected = [
-        item
-        for item in observations
-        if item.period_start == since and item.period_end == until
-        and item.creative_id in {
-            experiment.control.creative_id,
-            experiment.treatment.creative_id,
-        }
-    ]
-    control = _arm_totals(selected, experiment.control.creative_id)
-    treatment = _arm_totals(selected, experiment.treatment.creative_id)
-    context_ok, context_problems = _same_measurement_context(control, treatment)
-
-    base: dict[str, object] = {
-        "experiment_id": experiment.id,
-        "campaign_id": experiment.campaign_id,
-        "hypothesis": experiment.hypothesis,
-        "changed_factor": experiment.changed_factor,
-        "design": experiment.design,
-        "metric": experiment.primary_metric,
-        "action_type": experiment.action_type,
-        "expected_direction": experiment.expected_direction,
-        "window": {"since": since.isoformat(), "until": until.isoformat()},
-        "descriptive_only": experiment.design == "observational_comparison",
-        "causal_claim": False,
-        "control": {
-            "creative_id": experiment.control.creative_id,
-            "variant_id": experiment.control.variant_id,
-            "factor_value": experiment.control.factor_value,
-            "observation_count": len(control["rows"]),
-            "value": _point_value(
-                control, experiment.primary_metric, experiment.action_type
-            ),
-        },
-        "treatment": {
-            "creative_id": experiment.treatment.creative_id,
-            "variant_id": experiment.treatment.variant_id,
-            "factor_value": experiment.treatment.factor_value,
-            "observation_count": len(treatment["rows"]),
-            "value": _point_value(
-                treatment, experiment.primary_metric, experiment.action_type
-            ),
-        },
-    }
-
-    if not control["rows"] or not treatment["rows"]:
-        return {
-            **base,
-            "inferential": False,
-            "verdict": "inconclusive",
-            "reason": "missing_exact_window_observations_for_one_or_both_arms",
-            "minimum_evidence": {"met": False, "shortfalls": ["missing arm data"]},
-        }
-    if not context_ok:
-        return {
-            **base,
-            "inferential": False,
-            "verdict": "inconclusive",
-            "reason": "incompatible_measurement_context",
-            "context_problems": context_problems,
-            "minimum_evidence": {"met": False, "shortfalls": context_problems},
-        }
-
-    control_value = base["control"]["value"]  # type: ignore[index]
-    treatment_value = base["treatment"]["value"]  # type: ignore[index]
-    difference = (
-        float(treatment_value) - float(control_value)
-        if control_value is not None and treatment_value is not None
-        else None
-    )
-    relative_lift = (
-        difference / float(control_value)
-        if difference is not None and float(control_value) != 0.0
-        else None
-    )
-    base["difference"] = difference
-    base["relative_lift"] = relative_lift
-
-    if experiment.primary_metric not in INFERENTIAL_RATE_METRICS:
-        actions_control = float(dict(control["actions"]).get(experiment.action_type or "", 0.0))
-        actions_treatment = float(dict(treatment["actions"]).get(experiment.action_type or "", 0.0))
-        evidence = {
-            "met": (
-                actions_control >= experiment.thresholds.min_events_per_arm
-                and actions_treatment >= experiment.thresholds.min_events_per_arm
-            ),
-            "shortfalls": [],
-        }
-        if not evidence["met"]:
-            if actions_control < experiment.thresholds.min_events_per_arm:
-                evidence["shortfalls"].append("control action count below minimum")
-            if actions_treatment < experiment.thresholds.min_events_per_arm:
-                evidence["shortfalls"].append("treatment action count below minimum")
-        return {
-            **base,
-            "inferential": False,
-            "verdict": "inconclusive",
-            "reason": "value_metric_requires_variance_or_event_level_evidence",
-            "minimum_evidence": evidence,
-        }
-
+    control: dict[str, object],
+    treatment: dict[str, object],
+) -> tuple[dict[str, object], tuple[float, float] | None]:
     control_events, control_denominator = _rate_inputs(
         control, experiment.primary_metric, experiment.action_type
     )
@@ -480,23 +408,165 @@ def evaluate_experiment(
             treatment_interval[0] - control_interval[1],
             treatment_interval[1] - control_interval[0],
         )
+    evidence.update(
+        {
+            "control_events": control_events,
+            "control_denominator": control_denominator,
+            "control_confidence_interval": control_interval,
+            "treatment_events": treatment_events,
+            "treatment_denominator": treatment_denominator,
+            "treatment_confidence_interval": treatment_interval,
+        }
+    )
+    return evidence, difference_interval
 
+
+def evaluate_experiment(
+    experiment: ExperimentRecord,
+    observations: list[PerformanceObservation],
+    *,
+    since: date,
+    until: date,
+) -> dict[str, object]:
+    selected = [
+        item
+        for item in observations
+        if item.period_start == since
+        and item.period_end == until
+        and item.creative_id
+        in {
+            experiment.control.creative_id,
+            experiment.treatment.creative_id,
+        }
+    ]
+    control = _arm_totals(selected, experiment.control.creative_id)
+    treatment = _arm_totals(selected, experiment.treatment.creative_id)
+    context_ok, context_problems = _same_measurement_context(control, treatment)
+
+    control_value = _point_value(
+        control, experiment.primary_metric, experiment.action_type
+    )
+    treatment_value = _point_value(
+        treatment, experiment.primary_metric, experiment.action_type
+    )
+    base: dict[str, object] = {
+        "experiment_id": experiment.id,
+        "campaign_id": experiment.campaign_id,
+        "hypothesis": experiment.hypothesis,
+        "changed_factor": experiment.changed_factor,
+        "design": experiment.design,
+        "metric": experiment.primary_metric,
+        "action_type": experiment.action_type,
+        "expected_direction": experiment.expected_direction,
+        "window": {"since": since.isoformat(), "until": until.isoformat()},
+        "descriptive_only": experiment.design == "observational_comparison",
+        "causal_claim": False,
+        "control": {
+            "creative_id": experiment.control.creative_id,
+            "variant_id": experiment.control.variant_id,
+            "factor_value": experiment.control.factor_value,
+            "observation_count": len(control["rows"]),
+            "value": control_value,
+        },
+        "treatment": {
+            "creative_id": experiment.treatment.creative_id,
+            "variant_id": experiment.treatment.variant_id,
+            "factor_value": experiment.treatment.factor_value,
+            "observation_count": len(treatment["rows"]),
+            "value": treatment_value,
+        },
+    }
+
+    if not control["rows"] or not treatment["rows"]:
+        return {
+            **base,
+            "inferential": False,
+            "verdict": "inconclusive",
+            "reason": "missing_exact_window_observations_for_one_or_both_arms",
+            "minimum_evidence": {"met": False, "shortfalls": ["missing arm data"]},
+        }
+    if not context_ok:
+        return {
+            **base,
+            "inferential": False,
+            "verdict": "inconclusive",
+            "reason": "incompatible_measurement_context",
+            "context_problems": context_problems,
+            "minimum_evidence": {"met": False, "shortfalls": context_problems},
+        }
+
+    difference = (
+        treatment_value - control_value
+        if control_value is not None and treatment_value is not None
+        else None
+    )
+    relative_lift = (
+        difference / control_value
+        if difference is not None and control_value not in {None, 0.0}
+        else None
+    )
+    base["difference"] = difference
+    base["relative_lift"] = relative_lift
+
+    if experiment.primary_metric not in INFERENTIAL_RATE_METRICS:
+        actions_control = float(
+            dict(control["actions"]).get(experiment.action_type or "", 0.0)
+        )
+        actions_treatment = float(
+            dict(treatment["actions"]).get(experiment.action_type or "", 0.0)
+        )
+        shortfalls: list[str] = []
+        if actions_control < experiment.thresholds.min_events_per_arm:
+            shortfalls.append("control action count below minimum")
+        if actions_treatment < experiment.thresholds.min_events_per_arm:
+            shortfalls.append("treatment action count below minimum")
+        return {
+            **base,
+            "inferential": False,
+            "verdict": "inconclusive",
+            "reason": "value_metric_requires_variance_or_event_level_evidence",
+            "minimum_evidence": {"met": not shortfalls, "shortfalls": shortfalls},
+        }
+
+    evidence, difference_interval = _rate_evidence(
+        experiment, control, treatment
+    )
     base["control"].update(  # type: ignore[union-attr]
         {
-            "events": control_events,
-            "denominator": control_denominator,
-            "confidence_interval": control_interval,
+            "events": evidence["control_events"],
+            "denominator": evidence["control_denominator"],
+            "confidence_interval": evidence["control_confidence_interval"],
         }
     )
     base["treatment"].update(  # type: ignore[union-attr]
         {
-            "events": treatment_events,
-            "denominator": treatment_denominator,
-            "confidence_interval": treatment_interval,
+            "events": evidence["treatment_events"],
+            "denominator": evidence["treatment_denominator"],
+            "confidence_interval": evidence["treatment_confidence_interval"],
         }
     )
+    public_evidence = {
+        "met": evidence["met"],
+        "shortfalls": evidence["shortfalls"],
+    }
+    confidence = {
+        "level": experiment.thresholds.confidence_level,
+        "method": "newcombe_wilson_difference",
+        "difference_interval": difference_interval,
+    }
 
-    if not evidence["met"]:
+    if experiment.design == "observational_comparison":
+        return {
+            **base,
+            "descriptive_only": True,
+            "inferential": False,
+            "verdict": "inconclusive",
+            "reason": "observational_comparison_is_descriptive_only",
+            "minimum_evidence": public_evidence,
+            "confidence": confidence,
+        }
+
+    if not bool(evidence["met"]):
         verdict: ExperimentVerdict = "inconclusive"
         reason = "minimum_evidence_not_met"
     elif difference_interval is None:
@@ -506,16 +576,28 @@ def evaluate_experiment(
         lower, upper = difference_interval
         if experiment.expected_direction == "higher":
             if lower > 0:
-                verdict, reason = "supported", "confidence_interval_excludes_zero_in_expected_direction"
+                verdict, reason = (
+                    "supported",
+                    "confidence_interval_excludes_zero_in_expected_direction",
+                )
             elif upper < 0:
-                verdict, reason = "contradicted", "confidence_interval_excludes_zero_against_expected_direction"
+                verdict, reason = (
+                    "contradicted",
+                    "confidence_interval_excludes_zero_against_expected_direction",
+                )
             else:
                 verdict, reason = "inconclusive", "confidence_interval_includes_zero"
         else:
             if upper < 0:
-                verdict, reason = "supported", "confidence_interval_excludes_zero_in_expected_direction"
+                verdict, reason = (
+                    "supported",
+                    "confidence_interval_excludes_zero_in_expected_direction",
+                )
             elif lower > 0:
-                verdict, reason = "contradicted", "confidence_interval_excludes_zero_against_expected_direction"
+                verdict, reason = (
+                    "contradicted",
+                    "confidence_interval_excludes_zero_against_expected_direction",
+                )
             else:
                 verdict, reason = "inconclusive", "confidence_interval_includes_zero"
 
@@ -524,17 +606,13 @@ def evaluate_experiment(
         "inferential": True,
         "verdict": verdict,
         "reason": reason,
-        "minimum_evidence": evidence,
-        "confidence": {
-            "level": experiment.thresholds.confidence_level,
-            "method": "newcombe_wilson_difference",
-            "difference_interval": difference_interval,
-        },
+        "minimum_evidence": public_evidence,
+        "confidence": confidence,
     }
 
 
 def recommend_next_test(evaluation: dict[str, object]) -> dict[str, object]:
-    """Return a deterministic recommendation grounded in the recorded evidence."""
+    """Return a deterministic recommendation grounded in recorded evidence."""
 
     verdict = str(evaluation.get("verdict", "inconclusive"))
     experiment_id = str(evaluation.get("experiment_id", ""))
@@ -575,9 +653,9 @@ def recommend_next_test(evaluation: dict[str, object]) -> dict[str, object]:
             "action": "improve_measurement_design",
             "evidence_status": "inconclusive",
             "recommendation": (
-                "Treat the current direction as descriptive only. Use a rate-based "
-                "primary metric or ingest event-level/variance evidence before an "
-                "inferential verdict."
+                "Treat the current direction as descriptive only. Use a controlled "
+                "rate-based comparison or ingest event-level/variance evidence "
+                "before an inferential verdict."
             ),
             "causal_claim": False,
         }
