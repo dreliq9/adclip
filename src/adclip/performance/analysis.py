@@ -8,6 +8,9 @@ from datetime import date
 from adclip.performance.schema import PerformanceObservation
 
 
+PerformanceWindow = tuple[date, date, str]
+
+
 def _ratio(numerator: float, denominator: float) -> float | None:
     if denominator <= 0:
         return None
@@ -19,12 +22,35 @@ def _merge_metric_map(target: dict[str, float], source: dict[str, float]) -> Non
         target[key] = target.get(key, 0.0) + float(value)
 
 
+def _action_report_times(
+    observations: list[PerformanceObservation],
+) -> list[str]:
+    return sorted({item.action_report_time for item in observations})
+
+
+def _require_single_action_report_time(
+    observations: list[PerformanceObservation],
+) -> str | None:
+    values = _action_report_times(observations)
+    if len(values) > 1:
+        raise ValueError(
+            "Performance observations mix action_report_time values "
+            f"{values}; select one attribution reporting time explicitly"
+        )
+    return values[0] if values else None
+
+
 def available_windows(
     observations: list[PerformanceObservation],
-) -> list[tuple[date, date]]:
+) -> list[PerformanceWindow]:
+    """List exact measurement windows including attribution reporting time."""
+
     return sorted(
-        {(item.period_start, item.period_end) for item in observations},
-        key=lambda window: (window[1], window[0]),
+        {
+            (item.period_start, item.period_end, item.action_report_time)
+            for item in observations
+        },
+        key=lambda window: (window[1], window[0], window[2]),
     )
 
 
@@ -33,30 +59,90 @@ def select_window(
     *,
     since: date | None = None,
     until: date | None = None,
-) -> tuple[list[PerformanceObservation], tuple[date, date] | None]:
+    action_report_time: str | None = None,
+) -> tuple[list[PerformanceObservation], PerformanceWindow | None]:
+    """Select one exact date/attribution window without silently mixing ARTs."""
+
     if bool(since) != bool(until):
         raise ValueError("since and until must be provided together")
+
     if since is not None and until is not None:
-        selected = [
+        date_matches = [
             item
             for item in observations
             if item.period_start == since and item.period_end == until
         ]
-        return selected, (since, until)
-    windows = available_windows(observations)
-    if not windows:
+        available_arts = _action_report_times(date_matches)
+        selected_art = action_report_time
+        if selected_art is None:
+            if len(available_arts) > 1:
+                raise ValueError(
+                    "Multiple action_report_time values exist for "
+                    f"{since.isoformat()}..{until.isoformat()}: {available_arts}. "
+                    "Specify action_report_time explicitly."
+                )
+            selected_art = available_arts[0] if available_arts else None
+        selected = [
+            item
+            for item in date_matches
+            if selected_art is None or item.action_report_time == selected_art
+        ]
+        return (
+            selected,
+            (since, until, selected_art) if selected_art is not None else None,
+        )
+
+    if action_report_time is not None:
+        candidates = [
+            item
+            for item in observations
+            if item.action_report_time == action_report_time
+        ]
+        if not candidates:
+            return [], None
+        latest_dates = max(
+            {(item.period_start, item.period_end) for item in candidates},
+            key=lambda window: (window[1], window[0]),
+        )
+        selected = [
+            item
+            for item in candidates
+            if (item.period_start, item.period_end) == latest_dates
+        ]
+        return selected, (*latest_dates, action_report_time)
+
+    if not observations:
         return [], None
-    latest = windows[-1]
-    return [
+
+    latest_dates = max(
+        {(item.period_start, item.period_end) for item in observations},
+        key=lambda window: (window[1], window[0]),
+    )
+    latest_rows = [
         item
         for item in observations
-        if (item.period_start, item.period_end) == latest
-    ], latest
+        if (item.period_start, item.period_end) == latest_dates
+    ]
+    available_arts = _action_report_times(latest_rows)
+    if "conversion" in available_arts:
+        selected_art = "conversion"
+    elif len(available_arts) == 1:
+        selected_art = available_arts[0]
+    else:
+        raise ValueError(
+            "Latest performance window contains multiple action_report_time values "
+            f"{available_arts}; specify action_report_time explicitly"
+        )
+    selected = [
+        item for item in latest_rows if item.action_report_time == selected_art
+    ]
+    return selected, (*latest_dates, selected_art)
 
 
 def summarize_observations(
     observations: list[PerformanceObservation],
 ) -> list[dict[str, object]]:
+    action_report_time = _require_single_action_report_time(observations)
     grouped: dict[str, list[PerformanceObservation]] = defaultdict(list)
     for observation in observations:
         grouped[observation.creative_id].append(observation)
@@ -101,6 +187,7 @@ def summarize_observations(
                 "creative_id": creative_id,
                 "variant_id": rows[0].variant_id,
                 "platform": rows[0].platform,
+                "action_report_time": action_report_time,
                 "deployment_count": len({item.deployment_id for item in rows}),
                 "observation_count": len(rows),
                 "impressions": impressions,
@@ -140,6 +227,7 @@ def compare_observations(
     metric: str,
     action_type: str | None = None,
 ) -> dict[str, object]:
+    action_report_time = _require_single_action_report_time(observations)
     supported = {
         "ctr",
         "outbound_ctr",
@@ -196,6 +284,7 @@ def compare_observations(
     return {
         "metric": metric,
         "action_type": action_type,
+        "action_report_time": action_report_time,
         "action_rate_denominator": "clicks" if metric == "action_rate" else None,
         "direction": "lower_is_better" if lower_is_better else "higher_is_better",
         "descriptive_only": True,
