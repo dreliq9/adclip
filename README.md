@@ -2,16 +2,23 @@
 
 <!-- mcp-name: io.github.dreliq9/adclip -->
 
-**Generate ad creative from a single JSON brief.** adclip is an MCP server
-that turns a structured brief into ad copy and static images across Meta,
-Google, LinkedIn, and X formats. Self-review loops filter for policy
-violations and score variants before export.
+**Generate ad creative from a single JSON brief.** adclip is a standalone ad
+creative engine and MCP server that turns a structured brief into ad copy,
+static images, and short-form video across Meta, Google, LinkedIn, X, TikTok,
+and YouTube formats. Self-review loops filter for policy violations and score
+variants before export.
 
-Runs under your Claude Code subscription with **no API key** — adclip
-shells out to the `claude` CLI for LLM calls, so your subscription auth is
-reused. Paid third-party providers (Anthropic direct, fal.ai image
-generation) are opt-in and gated behind `ADCLIP_ALLOW_LIVE_APIS=1` so a
-stray key in your environment can't silently bill you.
+The CLI and MCP server are sibling interfaces over the same application layer.
+Core workflows do not require an MCP host, and external Adam Engineering
+projects are optional enhancements rather than runtime dependencies. See
+[`docs/STANDALONE_ARCHITECTURE.md`](docs/STANDALONE_ARCHITECTURE.md) for the
+local-first product contract and implementation sequence.
+
+Runs under your Claude Code subscription with **no API key** by default —
+adclip shells out to the `claude` CLI for LLM calls, so your subscription auth
+is reused. Paid third-party providers (Anthropic direct, fal.ai image
+generation) are opt-in and gated behind `ADCLIP_ALLOW_LIVE_APIS=1` so a stray
+key in your environment cannot silently bill you.
 
 ## What a run looks like
 
@@ -40,7 +47,7 @@ Out:
 - 2 × `meta_feed_4x5` composites (1080×1350, headline + body + CTA burned in)
 - 2 × `google_rsa` text variants
 - `manifest.json` with per-variant costs, policy flags, judge scores, and rationales
-- A campaign directory ready for `adclip_export_dco` → direct Meta DCO upload
+- A campaign directory ready for `adclip_export_dco` modular Meta export
 
 ## Install
 
@@ -55,7 +62,7 @@ pipx install "adclip[anthropic]"
 ```
 
 Requires Python 3.11+ and the [claude CLI](https://docs.claude.com/claude-code)
-on `$PATH` (for the default keyless LLM path).
+on `$PATH` for the default keyless LLM path.
 
 ### From source (for contributors)
 
@@ -65,6 +72,30 @@ cd adclip
 python3.11 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 ```
+
+## Standalone CLI
+
+The CLI calls the application layer directly; it does not start or import the
+MCP server.
+
+```bash
+adclip status                               # runtime mode + provider capabilities
+adclip formats                              # list format specs
+adclip estimate examples/taichi_brief.json  # cost preview
+adclip copy examples/taichi_brief.json      # copy only (no images)
+adclip run  examples/taichi_brief.json --image fake  # full pipeline, stub images
+```
+
+Connectivity can be constrained explicitly:
+
+```bash
+ADCLIP_RUNTIME_MODE=offline adclip status
+ADCLIP_RUNTIME_MODE=restricted_network \
+ADCLIP_ALLOWED_NETWORK_PROVIDERS=claude-cli adclip status
+```
+
+Supported modes are `online`, `restricted_network`, `offline`, and
+`air_gapped`. Paid providers still require `ADCLIP_ALLOW_LIVE_APIS=1`.
 
 ## MCP usage
 
@@ -86,7 +117,7 @@ Then ask Claude: *"Generate ad variants for examples/taichi_brief.json"*
 
 - `adclip_generate_variants` — full pipeline: brief → copy → policy → images → composite → render
 - `adclip_generate_copy` — copy pool only (cheap iteration before spending on images)
-- `adclip_export_dco` — emit Meta DCO modular components (deduped headlines/bodies/ctas + per-aspect images)
+- `adclip_export_dco` — emit Meta modular components (deduped headlines/bodies/CTAs + per-aspect images)
 
 <details>
 <summary>All 12 tools</summary>
@@ -107,20 +138,9 @@ Then ask Claude: *"Generate ad variants for examples/taichi_brief.json"*
 - `adclip_render_variant` — re-composite one variant (cheap; no LLM, no fal)
 - `adclip_regenerate` — redo one variant's copy, visual, or both
 - `adclip_score_variants` — re-rank variants against (possibly edited) brief; heuristic or LLM judge
-- `adclip_export_dco` — Meta DCO modular export
+- `adclip_export_dco` — Meta modular-component export
 
 </details>
-
-## CLI
-
-```bash
-adclip formats                              # list format specs
-adclip estimate examples/taichi_brief.json  # cost preview
-adclip copy examples/taichi_brief.json      # copy only (no images)
-adclip run  examples/taichi_brief.json --image fake  # full pipeline, stub images
-```
-
-The CLI uses `claude-cli` by default — no key setup needed.
 
 ## Formats
 
@@ -139,41 +159,43 @@ The CLI uses `claude-cli` by default — no key setup needed.
 
 ¹ Video formats produce a fal.ai-generated clip (default `kling-2.6`, 5s)
 with headline + CTA burned in via FFmpeg `drawtext`, scaled/padded to the
-format's dimensions, and (when audio is present) loudness-normalized to
-the format's LUFS target. Requires an `ffmpeg` build with the `drawtext`
-filter (i.e. compiled with freetype). Set `ADCLIP_ALLOW_LIVE_APIS=1` and
-`FAL_KEY` to enable; pass `--video fake` (CLI) or `video_provider="fake"`
-(MCP) for tests.
+format's dimensions, and (when audio is present) loudness-normalized to the
+format's LUFS target. Requires an `ffmpeg` build with the `drawtext` filter
+(i.e. compiled with freetype). Set `ADCLIP_ALLOW_LIVE_APIS=1` and `FAL_KEY` to
+enable; pass `--video fake` (CLI) or `video_provider="fake"` (MCP) for tests.
 
 ## LLM provider modes
 
 | Mode            | Key?    | Where it runs                       |
 |-----------------|---------|-------------------------------------|
 | `default` / `claude-cli` | none | Subprocess to the `claude` CLI; uses your subscription auth. |
-| `sampling`      | none    | MCP sampling — asks the calling MCP client to run the LLM. Only works under clients that implement sampling (Claude Code does not today). |
-| `anthropic`     | `adclip[anthropic]` extra + key + `ADCLIP_ALLOW_LIVE_APIS=1` | Direct Anthropic API. ~3× faster per call. |
+| `sampling`      | none    | MCP sampling — asks the calling MCP client to run the LLM. Only works under clients that implement sampling. |
+| `anthropic`     | `adclip[anthropic]` extra + key + `ADCLIP_ALLOW_LIVE_APIS=1` | Direct Anthropic API. |
 | `fake`          | none    | Deterministic scripted responses for tests. |
+
+Provider resolution is centralized in the application layer. Each adapter
+declares whether it needs network access, paid-API authorization, or an MCP
+host session, so every interface enforces the same runtime policy.
 
 ## Self-review loops
 
 - **Judge** (`use_judge: true`): after policy filtering, an LLM scores each
-  survivor on brand fit, angle fit, and copy quality; top-N by blended
-  score wins. `judge_score`, `judge_rationale`, and `judge_flags` land in
-  the manifest.
-- **Heal** (`heal_violations: N`): policy-violating candidates are sent
-  back to the LLM with the specific violations and asked to rewrite.
-  Successful heals gain a `heal_attempts` count and a `healed_from`
-  snapshot of the original copy.
-- **Semantic policy** (`use_semantic_policy: true`): an LLM second-pass
-  flags paraphrases that slip past the literal blocklist (e.g. "printing
-  money" when `must_avoid` contains "guaranteed returns"). Feeds the
-  same heal loop. Adds one LLM call per candidate — opt-in.
+  survivor on brand fit, angle fit, and copy quality; top-N by blended score
+  wins. `judge_score`, `judge_rationale`, and `judge_flags` land in the
+  manifest.
+- **Heal** (`heal_violations: N`): policy-violating candidates are sent back to
+  the LLM with the specific violations and asked to rewrite. Successful heals
+  gain a `heal_attempts` count and a `healed_from` snapshot of the original
+  copy.
+- **Semantic policy** (`use_semantic_policy: true`): an LLM second pass flags
+  paraphrases that slip past the literal blocklist. It feeds the same heal loop
+  and adds one LLM call per candidate.
 
 ## Live-API opt-in
 
 `ADCLIP_ALLOW_LIVE_APIS=1` must be set to use any paid third-party API
-(`anthropic` provider, fal.ai image + video). If a key is in your env but
-the gate is closed, the provider refuses with a clear error instead of
+(`anthropic` provider, fal.ai image + video). If a key is in your environment
+but the gate is closed, the provider refuses with a clear error instead of
 billing you. Default keyless paths never need this set.
 
 ## Tests
@@ -184,7 +206,8 @@ billing you. Default keyless paths never need this set.
 
 ## Status
 
-v0.1 — static images, text ads, and 9:16 video ads (Reels / TikTok /
-Shorts) via fal.ai (declip-driven model catalog). 12 MCP tools, CLI, four
-LLM providers (claude-cli / sampling / anthropic / fake), Meta DCO export,
-self-review loops (policy + heal + semantic + judge).
+v0.1 — static images, text ads, and 9:16 video ads (Reels / TikTok / Shorts)
+via fal.ai. Twelve MCP tools, a standalone CLI, centralized provider/runtime
+policy, Meta modular export, and self-review loops (policy + heal + semantic +
+judge). Persistent BrandKit, jobs, storage, and the local web workbench are the
+next standalone milestones.
