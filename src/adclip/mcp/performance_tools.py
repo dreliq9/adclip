@@ -14,9 +14,9 @@ def register(mcp) -> None:
         variant_id: str,
         account_id: str,
         ad_id: str,
-        campaign_id: str | None = None,
-        adset_id: str | None = None,
-        creative_id: str | None = None,
+        external_campaign_id: str | None = None,
+        external_adset_id: str | None = None,
+        external_creative_id: str | None = None,
         name: str | None = None,
     ) -> str:
         """Link an adclip variant to an existing Meta ad. Makes no API call."""
@@ -25,9 +25,9 @@ def register(mcp) -> None:
             variant_id=variant_id,
             account_id=account_id,
             ad_id=ad_id,
-            campaign_id=campaign_id,
-            adset_id=adset_id,
-            creative_id=creative_id,
+            external_campaign_id=external_campaign_id,
+            external_adset_id=external_adset_id,
+            external_creative_id=external_creative_id,
             name=name,
         )
         return json.dumps(result)
