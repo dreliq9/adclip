@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 
 from adclip.application.performance_services import PerformanceApplication
 from adclip.campaign import init_campaign_dir, write_manifest
@@ -18,6 +19,9 @@ def _campaign(tmp_path):
         output_dir=str(tmp_path / "campaign"),
     )
     init_campaign_dir(brief)
+    artifact = Path(brief.output_dir) / "variants" / "v01" / "meta_feed_4x5.png"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(b"exact creative bytes")
     write_manifest(
         brief,
         entries=[{
@@ -72,6 +76,8 @@ def test_link_sync_report_and_compare(tmp_path, monkeypatch):
     )
     assert linked["ok"] is True
     assert linked["deployment"]["account_id"] == "act_123"
+    assert linked["deployment"]["creative_id"].startswith("crv_")
+    assert len(linked["deployment"]["metadata"]["artifact_sha256"]) == 64
 
     monkeypatch.setattr(
         MetaPerformanceClient,
