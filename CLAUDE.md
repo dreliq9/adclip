@@ -10,11 +10,12 @@ Read before architectural changes:
 - `docs/STANDALONE_ARCHITECTURE.md`
 - `docs/MODEL_PROVIDERS.md`
 - `docs/MODEL_ROUTING.md`
+- `docs/EMAIL_CAMPAIGNS.md`
 
 Binding rules:
 
 - Core/domain/application modules must not import from `adclip.mcp`.
-- CLI, MCP, and future HTTP/UI adapters call `AdclipApplication`.
+- CLI, MCP, and future HTTP/UI adapters call application-layer services.
 - Workflows select capabilities and task routes, not vendor names.
 - Route, provider, model, and generation options are separate values.
 - Explicit provider/model values override route primaries.
@@ -25,6 +26,8 @@ Binding rules:
   request after failure.
 - Unsupported routes remain discoverable but must fail clearly until their
   required input contract and adapter exist.
+- Email rendering/editing is native and send-provider-neutral. Do not put
+  campaign document state inside an ESP adapter.
 - Existing CLI aliases, MCP tool names, briefs, and campaign exports remain
   compatible during migration.
 
@@ -53,6 +56,49 @@ budget        fal / wan-2.7
 Wan 2.6 remains a legacy compatibility alias and budget-route fallback. Do not
 promote a route because a model is fashionable; use the fixed bake-off fixtures
 and record quality, latency, cost, failure rate, and human preference.
+
+## Email campaign architecture
+
+Email follows:
+
+```text
+EmailCampaignBrief
+  -> provider-neutral sequence generation
+  -> EmailMessage blocks
+  -> HTML + text + headers
+  -> lint/compliance report
+  -> portable campaign bundle
+```
+
+The initial email implementation lives under:
+
+```text
+src/adclip/email/
+src/adclip/application/email_services.py
+src/adclip/mcp/email_tools.py
+```
+
+Rules:
+
+- `EmailMessage` block JSON is the editable source document.
+- Rendered HTML carries stable `adclip:block:<id>` markers.
+- HTML patches target those markers; do not introduce coordinate-based editing.
+- The native renderer must remain usable without Node.js or MJML.
+- MJML may be added as optional import/export or compilation support, not a
+  mandatory runtime dependency.
+- Render table-based, mostly inline-styled responsive HTML with a plain-text
+  alternative.
+- Reject scripts, forms, iframes, embedded objects, active media, and
+  `javascript:` URLs.
+- Marketing exports include visible unsubscribe treatment, postal-address
+  metadata, `List-Unsubscribe`, and `List-Unsubscribe-Post`.
+- Sender authentication, recipient-specific unsubscribe substitution, consent,
+  suppression lists, and delivery belong to future sending adapters.
+- Sending adapters consume exported content; they do not own campaign copy or
+  design state.
+- Rendering, linting, and patching must remain local and deterministic.
+- Email sequence generation uses the same text-provider registry and runtime
+  policy as ad copy.
 
 ## Evaluation policy
 
@@ -150,7 +196,7 @@ It is a compatibility source, not the primary routing policy. Do not add
 
 ## Testing requirements
 
-Use fake providers and mocked HTTP. Required coverage includes:
+Use fake providers and mocked HTTP. Required media/provider coverage includes:
 
 - provider/model independence and compatibility aliases;
 - task-route recommendation and explicit overrides;
@@ -166,11 +212,25 @@ Use fake providers and mocked HTTP. Required coverage includes:
 - dry-run bake-off making no provider call;
 - CLI importing no module under `adclip.mcp`.
 
-Do not require a live model server or paid API in the unit suite.
+Required email coverage includes:
+
+- marketing render includes HTML, text, footer, and one-click headers;
+- generated block IDs are stable and unique;
+- structured and rendered-HTML patches target the same block IDs;
+- unsafe raw HTML and `javascript:` URLs are rejected;
+- lint detects missing image alternatives, links, unsubscribe treatment, and
+  blocked active content;
+- generated cadence comes from the brief rather than model-invented values;
+- campaign export writes message JSON, HTML, text, headers, lint, and manifest;
+- email generation uses a fake text provider in tests;
+- no send provider or network call is required.
+
+Do not require a live model server, paid API, or email sending account in the
+unit suite.
 
 ## Next milestone
 
 S1 remains SQLite persistence, content-addressed artifacts, stable IDs/Manifest
-v2, and durable resumable jobs. Route selection, endpoint class, prompt version,
-parameters, cost, latency, retries, and artifact hashes must become authoritative
-per-asset provenance.
+v2, and durable resumable jobs. Route selection, email campaign/message state,
+endpoint class, prompt version, parameters, cost, latency, retries, and artifact
+hashes must become authoritative per-asset provenance.

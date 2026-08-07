@@ -1,0 +1,29 @@
+{
+  "id": "email_01",
+  "name": "Introduce the workflow",
+  "delay_days": 0,
+  "subject": "Test the workflow before you scale it",
+  "preheader": "A practical way to reduce rework.",
+  "blocks": [
+    {
+      "id": "headline",
+      "kind": "heading",
+      "text": "Test before you scale"
+    },
+    {
+      "id": "body_1",
+      "kind": "paragraph",
+      "text": "Widget lets a small team validate the workflow before committing more time and budget."
+    },
+    {
+      "id": "cta",
+      "kind": "button",
+      "text": "Start the trial",
+      "href": "https://example.com/trial"
+    }
+  ],
+  "tags": [
+    "awareness",
+    "trial"
+  ]
+}

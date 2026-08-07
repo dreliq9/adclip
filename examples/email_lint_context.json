@@ -1,0 +1,11 @@
+{
+  "campaign_type": "marketing",
+  "subject": "Test the workflow before you scale it",
+  "preheader": "A practical way to reduce rework.",
+  "unsubscribe_url": "{{unsubscribe_url}}",
+  "physical_address": "{{physical_address}}",
+  "headers": {
+    "List-Unsubscribe": "<{{unsubscribe_url}}>",
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+  }
+}

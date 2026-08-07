@@ -3,27 +3,29 @@
 <!-- mcp-name: io.github.dreliq9/adclip -->
 
 **A standalone, model-routed marketing creative engine.** adclip turns a
-structured campaign brief into policy-checked copy, static images, and
-short-form video for Meta, Google, LinkedIn, X, TikTok, and YouTube formats.
-It can be used through its CLI, MCP server, and future local web workbench.
+structured campaign brief into policy-checked copy, static images, short-form
+video, and responsive email campaigns for Meta, Google, LinkedIn, X, TikTok,
+YouTube, and inbox delivery. It can be used through its CLI, MCP server, and
+future local web workbench.
 
 adclip deliberately separates:
 
 ```text
-creative task -> route -> provider adapter -> model + generation options
+marketing task -> route/capability -> provider adapter -> model + options
 ```
 
-A campaign can request a text-heavy image, a bulk draft, or a premium video
-without hard-coding one vendor throughout the workflow. Routes select a current
-primary and expose ordered fallbacks; explicit provider/model overrides remain
-authoritative. Fallbacks are never run silently because another attempt may
-incur additional cost.
+A campaign can request a text-heavy image, a bulk draft, a premium video, or a
+multi-message email sequence without hard-coding one vendor throughout the
+workflow. Routes select a current primary and expose ordered fallbacks;
+explicit provider/model overrides remain authoritative. Fallbacks are never run
+silently because another attempt may incur additional cost.
 
 Architecture references:
 
 - [`docs/STANDALONE_ARCHITECTURE.md`](docs/STANDALONE_ARCHITECTURE.md)
 - [`docs/MODEL_PROVIDERS.md`](docs/MODEL_PROVIDERS.md)
 - [`docs/MODEL_ROUTING.md`](docs/MODEL_ROUTING.md)
+- [`docs/EMAIL_CAMPAIGNS.md`](docs/EMAIL_CAMPAIGNS.md)
 
 ## Current routes
 
@@ -77,6 +79,7 @@ adclip route-recommend image --text-heavy
 adclip estimate examples/taichi_brief.json
 adclip copy examples/taichi_brief.json
 adclip run examples/taichi_brief.json --image-provider fake
+adclip email --help
 ```
 
 ### Routed generation
@@ -108,6 +111,61 @@ Compatibility aliases remain:
 --image        -> --image-provider
 --video        -> --video-provider
 ```
+
+## Email campaigns and HTML editing
+
+Email is a native standalone capability, not a wrapper around one email service
+provider.
+
+```bash
+# Generate a sequence and portable campaign bundle
+adclip email generate email-brief.json \
+  --provider openai-compatible \
+  --model qwen2.5:14b
+
+# Render one structured message
+adclip email render email-brief.json message.json \
+  --output-dir ./rendered-email
+
+# Lint imported or generated HTML
+adclip email lint email.html \
+  --context lint-context.json \
+  --plain-text email.txt
+
+# Patch rendered HTML by stable block ID
+adclip email patch-html email.html patches.json \
+  --context lint-context.json \
+  --output email-edited.html
+
+# Patch the source message document before rendering
+adclip email patch-message message.json patches.json \
+  --output message-edited.json
+```
+
+A generated email campaign contains:
+
+```text
+campaign.json
+manifest.json
+emails/
+  01-email-01/
+    message.json
+    email.html
+    email.txt
+    headers.json
+    lint.json
+```
+
+The renderer emits conservative table-based responsive HTML, hidden preheader
+text, a plain-text alternative, stable block-editing markers, and marketing
+footer/header metadata. The linter checks active content, unsafe URLs, missing
+alt text and links, fragile CSS, subject/preheader length, unsubscribe and postal
+address treatment, one-click unsubscribe headers, and unresolved template
+tokens.
+
+Sending remains a connector boundary. Future ESP adapters will consume the
+portable bundle rather than own the email document. See
+[`docs/EMAIL_CAMPAIGNS.md`](docs/EMAIL_CAMPAIGNS.md).
 
 ## Recurring model bake-off
 
@@ -223,6 +281,11 @@ The MCP surface includes campaign generation and iteration plus:
 - routed full generation
 - routed visual-only generation
 - routed regeneration
+- `adclip_email_generate_campaign`
+- `adclip_email_render`
+- `adclip_email_lint`
+- `adclip_email_patch_html`
+- `adclip_email_patch_message`
 
 ## Runtime and billing safety
 
@@ -242,6 +305,10 @@ offline and air-gapped modes. Potentially paid providers require:
 ADCLIP_ALLOW_LIVE_APIS=1
 ```
 
+Email rendering, linting, and patching are local deterministic operations.
+Email generation uses the normal text-provider policy. No sending provider is
+invoked by the initial email slice.
+
 ## Tests
 
 ```bash
@@ -253,6 +320,7 @@ ADCLIP_ALLOW_LIVE_APIS=1
 The current foundation includes a transport-neutral application layer,
 model-agnostic text providers, task-oriented image/video routes, direct OpenAI
 image access, schema-aware fal adapters, run-level model provenance, a
-repeatable bake-off harness, and CLI/MCP access. SQLite, durable jobs,
-BrandKit/SourceLibrary, performance feedback, and the local browser workbench
-remain the next major milestones.
+repeatable bake-off harness, responsive email campaign generation and editing,
+and CLI/MCP access. SQLite, durable jobs, BrandKit/SourceLibrary, send-platform
+connectors, performance feedback, and the local browser workbench remain the
+next major milestones.

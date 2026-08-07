@@ -62,16 +62,40 @@ def routes_cmd(modality: str | None) -> None:
 
 @main.command("route-recommend")
 @click.argument("modality", type=click.Choice(["image", "video"]))
-@click.option("--text-heavy", is_flag=True)
+@click.option(
+    "--text-heavy",
+    is_flag=True,
+)
 @click.option("--reference-images", default=0, type=int)
 @click.option("--reference-media", default=0, type=int)
-@click.option("--existing-video", is_flag=True)
-@click.option("--vector-output", is_flag=True)
-@click.option("--premium", is_flag=True)
-@click.option("--high-volume", is_flag=True)
-@click.option("--draft", is_flag=True)
-@click.option("--multi-shot", is_flag=True)
-@click.option("--brand-control", is_flag=True)
+@click.option(
+    "--existing-video",
+    is_flag=True,
+)
+@click.option(
+    "--vector-output",
+    is_flag=True,
+)
+@click.option(
+    "--premium",
+    is_flag=True,
+)
+@click.option(
+    "--high-volume",
+    is_flag=True,
+)
+@click.option(
+    "--draft",
+    is_flag=True,
+)
+@click.option(
+    "--multi-shot",
+    is_flag=True,
+)
+@click.option(
+    "--brand-control",
+    is_flag=True,
+)
 def route_recommend_cmd(modality: str, **requirements: object) -> None:
     """Recommend an inspectable route from explicit creative requirements."""
     click.echo(
@@ -87,7 +111,10 @@ def route_recommend_cmd(modality: str, **requirements: object) -> None:
 @click.option("--image-route", default="default", type=_IMAGE_ROUTE_TYPE)
 @click.option("--image-model", default=None)
 @click.option("--video-route", default="default", type=_VIDEO_ROUTE_TYPE)
-@click.option("--video-model", default=None)
+@click.option(
+    "--video-model",
+    default=None,
+)
 def estimate_cmd(
     brief_path: str,
     image_route: str,
@@ -252,3 +279,8 @@ def bakeoff_cmd(
     except (RuntimeError, ValueError) as exc:
         result = {"ok": False, "error": str(exc)}
     click.echo(json.dumps(result, indent=2))
+
+
+from adclip.email.cli import email_group
+
+main.add_command(email_group)
