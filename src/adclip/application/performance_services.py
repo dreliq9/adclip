@@ -74,12 +74,21 @@ class PerformanceApplication:
             manifest = campaign_manifest(root)
             entry = find_creative_entry(root, variant_id=variant_id)
             account = _meta_account(account_id)
+            deployment_id = deployment_id_for("meta", account, str(ad_id))
+            existing = {item.id: item for item in load_deployments(root)}
+            prior = existing.get(deployment_id)
+            if prior is not None and prior.creative_id != str(entry["creative_id"]):
+                raise ValueError(
+                    f"Meta ad {ad_id} in {account} is already linked to creative "
+                    f"{prior.creative_id} (variant {prior.variant_id}); refusing to "
+                    "silently replace deployment lineage"
+                )
             metadata = {
                 "artifact_path": entry.get("path"),
                 "artifact_sha256": entry.get("artifact_sha256"),
             }
             deployment = DeploymentRecord(
-                id=deployment_id_for("meta", account, str(ad_id)),
+                id=deployment_id,
                 campaign_id=str(manifest["campaign_id"]),
                 creative_id=str(entry["creative_id"]),
                 variant_id=variant_id,
@@ -97,6 +106,9 @@ class PerformanceApplication:
                     str(external_creative_id) if external_creative_id else None
                 ),
                 external_name=name,
+                linked_at=(prior.linked_at if prior is not None else utc_now()),
+                last_synced_at=(prior.last_synced_at if prior is not None else None),
+                status=(prior.status if prior is not None else None),
                 metadata={key: value for key, value in metadata.items() if value is not None},
             )
             upsert_deployment(root, deployment)
@@ -157,6 +169,12 @@ class PerformanceApplication:
         for deployment in selected:
             try:
                 ad = client.get_ad(deployment.external_ad_id)
+                returned_ad_id = ad.get("id")
+                if returned_ad_id is not None and str(returned_ad_id) != deployment.external_ad_id:
+                    raise ValueError(
+                        f"Meta returned ad id {returned_ad_id!r} for linked ad "
+                        f"{deployment.external_ad_id!r}; refusing to accept observations"
+                    )
                 ad_account = ad.get("account_id")
                 if isinstance(ad_account, str) and not _same_meta_account(
                     deployment.account_id,
@@ -239,7 +257,11 @@ class PerformanceApplication:
             "read_only": True,
             "platform": "meta",
             "api_version": client.api_version,
-            "window": {"since": start.isoformat(), "until": end.isoformat()},
+            "window": {
+                "since": start.isoformat(),
+                "until": end.isoformat(),
+                "action_report_time": action_report_time,
+            },
             "deployment_count": len(selected),
             "observation_count": len(observations),
             "errors": errors,
@@ -252,6 +274,7 @@ class PerformanceApplication:
         *,
         since: str | date | None = None,
         until: str | date | None = None,
+        action_report_time: str | None = None,
     ) -> dict[str, object]:
         try:
             observations = load_observations(campaign_dir)
@@ -261,6 +284,7 @@ class PerformanceApplication:
                 observations,
                 since=start,
                 until=end,
+                action_report_time=action_report_time,
             )
         except (FileNotFoundError, ValueError) as exc:
             return {"ok": False, "error": str(exc)}
@@ -269,12 +293,20 @@ class PerformanceApplication:
             "ok": True,
             "descriptive_only": True,
             "selected_window": (
-                {"since": window[0].isoformat(), "until": window[1].isoformat()}
+                {
+                    "since": window[0].isoformat(),
+                    "until": window[1].isoformat(),
+                    "action_report_time": window[2],
+                }
                 if window
                 else None
             ),
             "available_windows": [
-                {"since": item[0].isoformat(), "until": item[1].isoformat()}
+                {
+                    "since": item[0].isoformat(),
+                    "until": item[1].isoformat(),
+                    "action_report_time": item[2],
+                }
                 for item in available_windows(observations)
             ],
             "observation_count": len(selected),
@@ -289,15 +321,17 @@ class PerformanceApplication:
         until: str | date,
         metric: str = "ctr",
         action_type: str | None = None,
+        action_report_time: str | None = None,
     ) -> dict[str, object]:
         try:
             start = _date(since)
             end = _date(until)
             observations = load_observations(campaign_dir)
-            selected, _window = select_window(
+            selected, window = select_window(
                 observations,
                 since=start,
                 until=end,
+                action_report_time=action_report_time,
             )
             comparison = compare_observations(
                 selected,
@@ -308,6 +342,10 @@ class PerformanceApplication:
             return {"ok": False, "error": str(exc)}
         return {
             "ok": True,
-            "window": {"since": start.isoformat(), "until": end.isoformat()},
+            "window": {
+                "since": start.isoformat(),
+                "until": end.isoformat(),
+                "action_report_time": window[2] if window else action_report_time,
+            },
             **comparison,
         }
