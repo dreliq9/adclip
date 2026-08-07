@@ -17,10 +17,10 @@ local-first product contract and
 extension contract.
 
 The compatibility default uses the `claude` CLI and its subscription auth, but
-text provider and model are independent selections. Local or hosted
-OpenAI-compatible endpoints, direct Anthropic, MCP sampling, and deterministic
-test providers use the same workflow contract. Paid third-party providers are
-opt-in and gated behind `ADCLIP_ALLOW_LIVE_APIS=1`.
+text provider and model are independent selections. Local commands, local or
+hosted OpenAI-compatible endpoints, direct Anthropic, MCP sampling, and
+deterministic test providers use the same workflow contract. Paid third-party
+providers are opt-in and gated behind `ADCLIP_ALLOW_LIVE_APIS=1`.
 
 ## What a run looks like
 
@@ -58,8 +58,8 @@ pipx install adclip
 ```
 
 Python 3.11+ is required. Install the Claude CLI only when using the
-`claude-cli` compatibility default. The generic OpenAI-compatible adapter has
-no additional Python dependency.
+`claude-cli` compatibility default. The generic OpenAI-compatible and command
+adapters have no additional Python dependency.
 
 For the optional direct-Anthropic-API provider:
 
@@ -122,6 +122,20 @@ export ADCLIP_RUNTIME_MODE=offline
 adclip copy examples/taichi_brief.json
 ```
 
+A local model CLI can be used without an HTTP server:
+
+```bash
+export ADCLIP_TEXT_PROVIDER=command
+export ADCLIP_COMMAND_TEXT_COMMAND='my-model-cli --model {model} --json'
+export ADCLIP_COMMAND_TEXT_MODEL=my-local-model
+export ADCLIP_RUNTIME_MODE=air_gapped
+
+adclip copy examples/taichi_brief.json
+```
+
+The command reads the prompt from stdin and writes the response to stdout;
+adclip does not invoke a shell.
+
 Loopback inference is allowed in `offline` and `air_gapped` modes. A
 non-loopback compatible endpoint is treated as external and potentially paid,
 so normal network and billing authorization applies.
@@ -150,8 +164,9 @@ Add to `.mcp.json` or `~/.claude.json`:
 }
 ```
 
-Then ask the host to generate variants from a brief. MCP generation tools also
-accept separate provider and model arguments for text, image, and video.
+Then ask the host to generate variants from a brief. MCP generation,
+visual-only, regeneration, scoring, and judging paths accept separate provider
+and model arguments for every modality they invoke.
 
 ### The three tools used most
 
@@ -210,6 +225,7 @@ CTA overlays with FFmpeg. Select its model with `--video-model` or
 | --- | --- | --- |
 | `default` / `claude-cli` | none | Explicit model or `ADCLIP_CLAUDE_MODEL`; default `sonnet` |
 | `openai-compatible` | optional | Explicit model required; local or hosted `/v1/chat/completions` |
+| `command` | none | Any local executable reading stdin and writing stdout |
 | `sampling` | none | Model selected by the sampling-capable MCP host |
 | `anthropic` | key + live-API authorization | Explicit model or `ADCLIP_ANTHROPIC_MODEL` |
 | `fake` | none | Deterministic test output |
@@ -222,8 +238,8 @@ do not contain vendor resolver branches.
 ## Media providers
 
 The current image and video production provider is `fal`; `fake` is the local
-test provider. Provider and model are already separate in application, CLI,
-and MCP contracts:
+test provider. Provider and model are separate in application, CLI, and MCP
+contracts:
 
 ```text
 ADCLIP_IMAGE_PROVIDER
@@ -231,6 +247,10 @@ ADCLIP_IMAGE_MODEL
 ADCLIP_VIDEO_PROVIDER
 ADCLIP_VIDEO_MODEL
 ```
+
+The image adapter accepts friendly aliases such as `flux-dev` and `imagen-3`,
+as well as raw fal endpoints such as `fal-ai/vendor/custom-model`. The video
+adapter similarly accepts its catalog aliases or raw endpoints.
 
 When a second production media provider is added, it should register behind the
 same binding contract rather than adding campaign-level conditionals.
@@ -243,7 +263,7 @@ same binding contract rather than adding campaign-level conditionals.
   literal rules.
 
 These workflows consume the neutral text-generation contract and therefore use
-the same selected model as copy generation.
+the selected provider/model rather than a hard-coded vendor.
 
 ## Live-API opt-in
 
@@ -260,7 +280,8 @@ a key in the environment is not authorization.
 ## Status
 
 The current standalone foundation includes a transport-neutral application
-layer, provider/model separation, local OpenAI-compatible text inference,
-selectable image and video models, explicit runtime modes, twelve MCP tools,
-and CLI access. SQLite persistence, durable jobs, BrandKit/SourceLibrary, and
-the local browser workbench are the next standalone milestones.
+layer, provider/model separation, local OpenAI-compatible and command-based
+text inference, selectable image and video models, explicit runtime modes,
+twelve MCP tools, and CLI access. SQLite persistence, durable jobs,
+BrandKit/SourceLibrary, and the local browser workbench are the next standalone
+milestones.
