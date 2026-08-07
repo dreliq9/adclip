@@ -1,7 +1,8 @@
 """Static image generation via fal.ai.
 
-Wraps Flux and Imagen models. Produces raw visual assets; overlays/text
-are burned in by compose.py using the ffmpeg backend.
+Known aliases remain convenient, but callers may also pass a raw fal.ai model
+endpoint. Provider selection and model selection are handled independently by
+the application/provider layer.
 """
 
 from __future__ import annotations
@@ -62,13 +63,28 @@ def build_image_prompt(
         f"Tone: {brief.tone}. "
         f"Brand palette: {colors}. "
         f"Format: {aspect_hint}. "
-        f"Clean composition, leave negative space at top and bottom for headline and CTA overlays. "
-        f"Photorealistic, high detail, commercial-grade."
+        "Clean composition, leave negative space at top and bottom for "
+        "headline and CTA overlays. Photorealistic, high detail, commercial-grade."
     )
 
 
 def estimate_image_cost(model: str, n: int) -> float:
+    """Estimate known aliases and conservatively price unknown raw endpoints."""
+
     return COST_PER_IMAGE.get(model, 0.05) * n
+
+
+def resolve_model_endpoint(model: str) -> str:
+    """Resolve a friendly alias or accept a raw fal.ai endpoint ID."""
+
+    if model in MODELS:
+        return MODELS[model]
+    if "/" in model and not model.startswith(("http://", "https://")):
+        return model
+    raise ValueError(
+        f"Unknown image model alias: {model!r}. Use one of {sorted(MODELS)} "
+        "or pass a raw fal.ai endpoint such as 'fal-ai/vendor/model'."
+    )
 
 
 def generate_image(
@@ -80,13 +96,11 @@ def generate_image(
     seed: int | None = None,
 ) -> ImageResult:
     """Generate one image. Blocks until the fal job returns."""
-    import fal_client  # imported lazily so tests don't need the key
+    import fal_client
 
     _check_key()
     fmt = get_format(format_name)
-    model_id = MODELS.get(model)
-    if not model_id:
-        raise ValueError(f"Unknown image model: {model!r}. Options: {sorted(MODELS)}")
+    model_id = resolve_model_endpoint(model)
 
     args: dict = {
         "prompt": prompt,
