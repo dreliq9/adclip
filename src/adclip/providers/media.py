@@ -43,7 +43,9 @@ class MediaProviderBinding:
         }
 
 
-def fake_image_provider(prompt, *, format_name, output_dir, seed):
+def fake_image_provider(
+    prompt, *, format_name, output_dir, seed, model="fake-image-v1"
+):
     from PIL import Image
 
     from adclip.formats import get_format
@@ -57,13 +59,16 @@ def fake_image_provider(prompt, *, format_name, output_dir, seed):
     class Result:
         local_path = str(path)
         url = ""
-        model = "fake-image-v1"
         cost_usd = 0.0
 
-    return Result()
+    result = Result()
+    result.model = model
+    return result
 
 
-def fake_video_provider(prompt, *, format_name, output_dir, seed):
+def fake_video_provider(
+    prompt, *, format_name, output_dir, seed, model="fake-video-v1"
+):
     """Synthesize a one-second test MP4 via FFmpeg lavfi."""
 
     from adclip.formats import get_format
@@ -92,11 +97,12 @@ def fake_video_provider(prompt, *, format_name, output_dir, seed):
     class Result:
         local_path = str(path)
         url = ""
-        model = "fake-video-v1"
         cost_usd = 0.0
         duration = 1.0
 
-    return Result()
+    result = Result()
+    result.model = model
+    return result
 
 
 def _configured_provider(requested: str, env_name: str, fallback: str) -> str:
@@ -114,11 +120,22 @@ def resolve_image_provider(
     active_policy = policy or RuntimePolicy.from_env()
     canonical = _configured_provider(name, "ADCLIP_IMAGE_PROVIDER", "fal")
     if canonical == "fake":
+        selected_model = model or "fake-image-v1"
+
+        def _invoke(prompt, *, format_name, output_dir, seed):
+            return fake_image_provider(
+                prompt,
+                format_name=format_name,
+                output_dir=output_dir,
+                seed=seed,
+                model=selected_model,
+            )
+
         return MediaProviderBinding(
             media_kind="image",
             provider_name="fake",
-            model_name=model or "fake-image-v1",
-            invoke=fake_image_provider,
+            model_name=selected_model,
+            invoke=_invoke,
         )
     if canonical == "fal":
         selected_model = model or os.environ.get("ADCLIP_IMAGE_MODEL") or "flux-dev"
@@ -158,11 +175,22 @@ def resolve_video_provider(
     active_policy = policy or RuntimePolicy.from_env()
     canonical = _configured_provider(name, "ADCLIP_VIDEO_PROVIDER", "fal")
     if canonical == "fake":
+        selected_model = model or "fake-video-v1"
+
+        def _invoke(prompt, *, format_name, output_dir, seed):
+            return fake_video_provider(
+                prompt,
+                format_name=format_name,
+                output_dir=output_dir,
+                seed=seed,
+                model=selected_model,
+            )
+
         return MediaProviderBinding(
             media_kind="video",
             provider_name="fake",
-            model_name=model or "fake-video-v1",
-            invoke=fake_video_provider,
+            model_name=selected_model,
+            invoke=_invoke,
         )
     if canonical == "fal":
         selected_model = model or os.environ.get("ADCLIP_VIDEO_MODEL") or "kling-2.6"

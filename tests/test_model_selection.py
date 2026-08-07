@@ -45,6 +45,16 @@ def test_registry_resolves_provider_and_model_independently():
     }
 
 
+def test_fake_provider_uses_selected_model_identity():
+    provider, selection = default_text_registry().resolve_with_selection(
+        "fake",
+        model="fixture-model",
+        policy=RuntimePolicy(mode=RuntimeMode.OFFLINE),
+    )
+    assert provider.model_name == "fixture-model"
+    assert selection.model == "fixture-model"
+
+
 def test_model_selection_round_trips_through_application(tmp_path):
     app = AdclipApplication(
         runtime_policy=RuntimePolicy(mode=RuntimeMode.OFFLINE)
@@ -91,6 +101,8 @@ def test_media_provider_and_model_are_independent():
     policy = RuntimePolicy(mode=RuntimeMode.OFFLINE)
     image = resolve_image_provider("fal", model="imagen-3", policy=policy)
     video = resolve_video_provider("fal", model="veo-3.1", policy=policy)
+    # Resolution is side-effect free; runtime policy is checked only if the
+    # paid network provider is actually invoked by a matching format.
     assert image.as_dict() == {"provider": "fal", "model": "imagen-3"}
     assert video.as_dict() == {"provider": "fal", "model": "veo-3.1"}
 

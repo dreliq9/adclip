@@ -224,10 +224,9 @@ class TextProviderRegistry:
 
 
 def _fake_factory(context: TextProviderContext) -> TextGenerationProvider:
-    del context
     from adclip.llm import FakeLLMProvider
 
-    return FakeLLMProvider()
+    return FakeLLMProvider(model=context.model or "fake-v1")
 
 
 def _claude_cli_factory(context: TextProviderContext) -> TextGenerationProvider:

@@ -62,7 +62,9 @@ class FakeLLMProvider:
     """Deterministic provider for tests. Returns ``n`` scripted candidates."""
 
     provider_name = "fake"
-    model_name = "fake-v1"
+
+    def __init__(self, model: str = "fake-v1") -> None:
+        self.model_name = model
 
     async def generate(self, prompt: str, n: int) -> str:
         del prompt
