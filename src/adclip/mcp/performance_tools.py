@@ -1,9 +1,10 @@
-"""MCP tools for read-only performance ingestion and creative comparison."""
+"""MCP tools for read-only performance ingestion and creative experiments."""
 
 from __future__ import annotations
 
 import json
 
+from adclip.application.experiment_services import ExperimentApplication
 from adclip.application.performance_services import PerformanceApplication
 
 
@@ -86,5 +87,82 @@ def register(mcp) -> None:
                 until=until,
                 metric=metric,
                 action_type=action_type,
+            )
+        )
+
+    @mcp.tool()
+    def adclip_experiment_create(
+        campaign_dir: str,
+        name: str,
+        hypothesis: str,
+        changed_factor: str,
+        control_variant_id: str,
+        treatment_variant_id: str,
+        control_value: str,
+        treatment_value: str,
+        primary_metric: str = "ctr",
+        action_type: str | None = None,
+        expected_direction: str = "higher",
+        design: str = "controlled_single_factor",
+        min_denominator_per_arm: int | None = None,
+        min_events_per_arm: int | None = None,
+        confidence_level: float | None = None,
+    ) -> str:
+        """Declare one changed-factor hypothesis against exact creative artifacts."""
+        result = ExperimentApplication().create(
+            campaign_dir,
+            name=name,
+            hypothesis=hypothesis,
+            changed_factor=changed_factor,
+            control_variant_id=control_variant_id,
+            treatment_variant_id=treatment_variant_id,
+            control_value=control_value,
+            treatment_value=treatment_value,
+            primary_metric=primary_metric,
+            action_type=action_type,
+            expected_direction=expected_direction,
+            design=design,
+            min_denominator_per_arm=min_denominator_per_arm,
+            min_events_per_arm=min_events_per_arm,
+            confidence_level=confidence_level,
+        )
+        return json.dumps(result)
+
+    @mcp.tool()
+    def adclip_experiments(campaign_dir: str) -> str:
+        """List declared creative experiments."""
+        return json.dumps(ExperimentApplication().list(campaign_dir))
+
+    @mcp.tool()
+    def adclip_experiment_evaluate(
+        campaign_dir: str,
+        experiment_id: str,
+        since: str,
+        until: str,
+    ) -> str:
+        """Evaluate a hypothesis against one exact stored observation window."""
+        return json.dumps(
+            ExperimentApplication().evaluate(
+                campaign_dir,
+                experiment_id=experiment_id,
+                since=since,
+                until=until,
+            )
+        )
+
+    @mcp.tool()
+    def adclip_experiment_next_test(
+        campaign_dir: str,
+        experiment_id: str,
+        since: str,
+        until: str,
+    ) -> str:
+        """Recommend the next controlled test from recorded evidence."""
+        return json.dumps(
+            ExperimentApplication().next_test(
+                campaign_dir,
+                experiment_id=experiment_id,
+                since=since,
+                until=until,
             )
         )
