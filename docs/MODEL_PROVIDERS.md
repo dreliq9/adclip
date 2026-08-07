@@ -172,6 +172,7 @@ cost estimate and actual cost
 artifact hash
 ```
 
-The current application and model-using MCP workflows return selected
-provider/model identities. Manifest v2 and durable jobs will make this
-provenance authoritative in milestone S1.
+Current full-generation and visual-only campaign manifests persist the selected
+provider/model identities at run level. Regeneration and model-based judging
+return the selected identities to their callers. Manifest v2 and durable jobs
+will extend this into authoritative per-asset lineage in milestone S1.

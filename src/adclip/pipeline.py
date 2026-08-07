@@ -1,8 +1,9 @@
 """Top-level pipeline: brief -> copy pool -> policy filter -> rank ->
-image gen -> compose -> render -> manifest.
+media generation -> compose -> render -> manifest.
 
-v0.1 supports static formats end-to-end. Video formats are accepted in
-the brief but skipped with a manifest note (until Phase 6 video path lands).
+Provider and model selection happens in the application layer. This module
+consumes neutral provider callables and records their selected identities when
+supplied.
 """
 
 from __future__ import annotations
@@ -114,6 +115,7 @@ async def run_pipeline(
     llm_provider: LLMProvider | None = None,
     image_fn: Callable | None = None,
     video_fn: Callable | None = None,
+    models: dict[str, object] | None = None,
 ) -> dict:
     llm_provider = llm_provider or default_provider()
     image_fn = image_fn or _default_image_fn
@@ -201,10 +203,18 @@ async def run_pipeline(
             path=f"variants/{vid}/{w['format']}.mp4",
         ))
 
-    write_manifest(brief, entries=entries, cost_usd=total_cost)
-    return {
+    write_manifest(
+        brief,
+        entries=entries,
+        cost_usd=total_cost,
+        models=models,
+    )
+    result = {
         "ok": True,
         "entries": entries,
         "rejected_count": len(rejected),
         "total_cost_usd": total_cost,
     }
+    if models:
+        result["models"] = models
+    return result

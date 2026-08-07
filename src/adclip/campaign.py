@@ -29,6 +29,7 @@ def write_manifest(
     *,
     entries: list[dict],
     cost_usd: float,
+    models: dict[str, object] | None = None,
 ) -> Path:
     root = Path(brief.output_dir)
     manifest = {
@@ -43,6 +44,8 @@ def write_manifest(
         "total_cost_usd": cost_usd,
         "entries": entries,
     }
+    if models:
+        manifest["models"] = models
     path = root / "manifest.json"
     path.write_text(json.dumps(manifest, indent=2))
     return path

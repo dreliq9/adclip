@@ -240,28 +240,38 @@ class AdclipApplication:
             model=requested_text_model,
             session=session,
         )
-        image_binding = resolve_image_provider(
-            image_provider_name,
-            model=image_model_name,
-            policy=self.runtime_policy,
-        )
-        video_binding = resolve_video_provider(
-            video_provider_name,
-            model=video_model_name,
-            policy=self.runtime_policy,
-        )
-        result = await run_pipeline(
+
+        format_kinds = {get_format(name).kind for name in brief.formats}
+        image_binding = None
+        video_binding = None
+        if "static" in format_kinds:
+            image_binding = resolve_image_provider(
+                image_provider_name,
+                model=image_model_name,
+                policy=self.runtime_policy,
+            )
+        if "video" in format_kinds:
+            video_binding = resolve_video_provider(
+                video_provider_name,
+                model=video_model_name,
+                policy=self.runtime_policy,
+            )
+
+        models: dict[str, object] = {
+            "text": text_selection.as_dict(),
+        }
+        if image_binding is not None:
+            models["image"] = image_binding.as_dict()
+        if video_binding is not None:
+            models["video"] = video_binding.as_dict()
+
+        return await run_pipeline(
             brief,
             llm_provider=text_provider,
             image_fn=image_binding,
             video_fn=video_binding,
+            models=models,
         )
-        result["models"] = {
-            "text": text_selection.as_dict(),
-            "image": image_binding.as_dict(),
-            "video": video_binding.as_dict(),
-        }
-        return result
 
     async def generate_variants_json(
         self,
