@@ -1,70 +1,236 @@
 # CLAUDE.md — adclip project context
 
+## Product contract
+
+adclip is a standalone, local-first, model-routed marketing creative
+application. MCP is one interface adapter; it is not the architecture.
+
+Read before architectural changes:
+
+- `docs/STANDALONE_ARCHITECTURE.md`
+- `docs/MODEL_PROVIDERS.md`
+- `docs/MODEL_ROUTING.md`
+- `docs/EMAIL_CAMPAIGNS.md`
+
+Binding rules:
+
+- Core/domain/application modules must not import from `adclip.mcp`.
+- CLI, MCP, and future HTTP/UI adapters call application-layer services.
+- Workflows select capabilities and task routes, not vendor names.
+- Route, provider, model, and generation options are separate values.
+- Explicit provider/model values override route primaries.
+- Provider adapters own vendor schemas; campaign and interface code do not.
+- Different model families require distinct request builders. Never restore a
+  universal fal request dictionary.
+- Route fallbacks are visible metadata. Never silently execute another paid
+  request after failure.
+- Unsupported routes remain discoverable but must fail clearly until their
+  required input contract and adapter exist.
+- Email rendering/editing is native and send-provider-neutral. Do not put
+  campaign document state inside an ESP adapter.
+- Existing CLI aliases, MCP tool names, briefs, and campaign exports remain
+  compatible during migration.
+
+## Current routing policy
+
+Image:
+
+```text
+general       fal / gpt-image-2 medium
+text-heavy    fal / gpt-image-2 high
+bulk          fal / flux-2-pro
+draft         fal / nano-banana-2-lite
+brand-control fal / flux-2-flex
+premium       direct OpenAI / gpt-image-2 high
+```
+
+Video:
+
+```text
+general       fal / kling-o3-standard
+premium       fal / veo-3.1
+multi-shot    fal / seedance-2-fast
+budget        fal / wan-2.7
+```
+
+Wan 2.6 remains a legacy compatibility alias and budget-route fallback. Do not
+promote a route because a model is fashionable; use the fixed bake-off fixtures
+and record quality, latency, cost, failure rate, and human preference.
+
+## Email campaign architecture
+
+Email follows:
+
+```text
+EmailCampaignBrief
+  -> provider-neutral sequence generation
+  -> EmailMessage blocks
+  -> HTML + text + headers
+  -> lint/compliance report
+  -> portable campaign bundle
+```
+
+The initial email implementation lives under:
+
+```text
+src/adclip/email/
+src/adclip/application/email_services.py
+src/adclip/mcp/email_tools.py
+```
+
+Rules:
+
+- `EmailMessage` block JSON is the editable source document.
+- Rendered HTML carries stable `adclip:block:<id>` markers.
+- HTML patches target those markers; do not introduce coordinate-based editing.
+- The native renderer must remain usable without Node.js or MJML.
+- MJML may be added as optional import/export or compilation support, not a
+  mandatory runtime dependency.
+- Render table-based, mostly inline-styled responsive HTML with a plain-text
+  alternative.
+- Reject scripts, forms, iframes, embedded objects, active media, and
+  `javascript:` URLs.
+- Marketing exports include visible unsubscribe treatment, postal-address
+  metadata, `List-Unsubscribe`, and `List-Unsubscribe-Post`.
+- Sender authentication, recipient-specific unsubscribe substitution, consent,
+  suppression lists, and delivery belong to future sending adapters.
+- Sending adapters consume exported content; they do not own campaign copy or
+  design state.
+- Rendering, linting, and patching must remain local and deterministic.
+- Email sequence generation uses the same text-provider registry and runtime
+  policy as ad copy.
+
+## Evaluation policy
+
+`adclip bakeoff` is dry-run by default. Paid execution requires `--execute` and
+normal live-API authorization. The harness records:
+
+```text
+fixture
+route
+provider
+model
+options
+latency
+cost
+artifact SHA-256
+evaluation dimensions
+human score / notes
+```
+
+Keep fixtures stable enough for longitudinal comparison. Add a fixture only
+when it captures a materially different marketing failure mode.
+
+## Runtime and billing policy
+
+Runtime modes:
+
+```text
+online
+restricted_network
+offline
+air_gapped
+```
+
+`ADCLIP_ALLOWED_NETWORK_PROVIDERS` controls external access in restricted mode.
+Potentially paid providers require `ADCLIP_ALLOW_LIVE_APIS=1`. Loopback text
+inference is allowed offline and air-gapped; external endpoints are not.
+
+Configuration:
+
+```text
+ADCLIP_TEXT_PROVIDER
+ADCLIP_TEXT_MODEL
+ADCLIP_IMAGE_ROUTE
+ADCLIP_IMAGE_PROVIDER
+ADCLIP_IMAGE_MODEL
+ADCLIP_VIDEO_ROUTE
+ADCLIP_VIDEO_PROVIDER
+ADCLIP_VIDEO_MODEL
+```
+
+Provider-specific text configuration includes:
+
+```text
+ADCLIP_CLAUDE_MODEL
+ADCLIP_ANTHROPIC_MODEL
+ADCLIP_OPENAI_MODEL
+ADCLIP_OPENAI_BASE_URL
+ADCLIP_COMMAND_TEXT_COMMAND
+ADCLIP_COMMAND_TEXT_MODEL
+```
+
+Direct OpenAI image access uses `ADCLIP_OPENAI_IMAGE_API_KEY` or
+`OPENAI_API_KEY`. Do not add a vendor SDK when a stable HTTP contract is
+sufficient.
+
+## Built-in providers
+
+Text:
+
+1. `claude-cli` — subscription-authenticated compatibility default.
+2. `sampling` — sampling-capable MCP host.
+3. `anthropic` — direct opt-in Anthropic API.
+4. `openai-compatible` — local or hosted `/v1/chat/completions` endpoint.
+5. `command` — local executable over stdin/stdout without a shell.
+6. `fake` — deterministic test provider.
+
+Media:
+
+- fal image: GPT Image 2, Nano Banana, FLUX.2, legacy aliases, raw endpoints
+- direct OpenAI image: standard Images API
+- fal video: Kling, Veo, Seedance, Wan 2.7, Wan 2.6 legacy, raw endpoints
+- fake image/video: deterministic tests
+
+Reference-image editing, vector generation, multi-reference video,
+image-animation, and footage-edit routes are cataloged but intentionally
+non-executable until their input contracts and adapters exist.
+
+Legacy `LLM*` names and `llm_*` arguments remain compatibility aliases.
+
 ## Vendored declip slice
 
-`src/adclip/_video_backend.py` is a small (~350-line) vendored slice of
-declip's `fetch_models.py` and `ops.loudnorm`. It is the **only** code
-adclip needs from declip; the rest of declip's video-editor surface is
-out of scope here. adclip is pipx-installable as a single package — do
-not add `declip` as a runtime dependency.
+`src/adclip/_video_backend.py` supplies legacy fal aliases and loudness logic.
+It is a compatibility source, not the primary routing policy. Do not add
+`declip` as a runtime dependency.
 
-When to sync `_video_backend.py` against declip:
+## Testing requirements
 
-- fal.ai redesigns its `/explore` page (breaks `_CARD_PATTERN`)
-- New model families ship and we want hardcoded aliases beyond the live
-  catalog (Kling/Wan/Veo/Sora successors)
-- declip refines the loudnorm two-pass logic in a way we want
+Use fake providers and mocked HTTP. Required media/provider coverage includes:
 
-The earlier `render_schema.py` + `backends/ffmpeg.py` vendoring drifted
-because those files were huge AND adclip didn't actually use them. The
-current slice is small, fully exercised, and easy to keep in sync.
+- provider/model independence and compatibility aliases;
+- task-route recommendation and explicit overrides;
+- unrelated model overrides not inheriting route-family options;
+- non-executable route rejection;
+- GPT Image, Nano Banana, FLUX, Kling, Veo, Seedance, Wan 2.7, and legacy Wan
+  2.6 request schemas;
+- direct OpenAI image handling;
+- offline/air-gapped provider policy;
+- unused modalities not being resolved;
+- status reporting invalid configured routes without crashing;
+- run-level route/provider/model provenance;
+- dry-run bake-off making no provider call;
+- CLI importing no module under `adclip.mcp`.
 
-## No API key, by construction
+Required email coverage includes:
 
-adclip never requires `ANTHROPIC_API_KEY`. Any runtime error mentioning a
-missing key means the wrong provider got instantiated. **Do not add the key
-as a workaround.** Do not write code that reads it. Do not rewrite the
-LLM layer.
+- marketing render includes HTML, text, footer, and one-click headers;
+- generated block IDs are stable and unique;
+- structured and rendered-HTML patches target the same block IDs;
+- unsafe raw HTML and `javascript:` URLs are rejected;
+- lint detects missing image alternatives, links, unsubscribe treatment, and
+  blocked active content;
+- generated cadence comes from the brief rather than model-invented values;
+- campaign export writes message JSON, HTML, text, headers, lint, and manifest;
+- email generation uses a fake text provider in tests;
+- no send provider or network call is required.
 
-## The three LLM provider paths
+Do not require a live model server, paid API, or email sending account in the
+unit suite.
 
-1. **Claude CLI subprocess** (`ClaudeCliProvider`) — shells out to
-   `claude -p` using the user's subscription auth. No key. This is the
-   default for both the MCP tools and the CLI. Claude Code's MCP client
-   does not currently implement sampling, so the MCP tools route
-   `"default"` here for reliability.
+## Next milestone
 
-2. **MCP sampling** (`SamplingLLMProvider`) — opt-in via
-   `llm_provider="sampling"`. The host MCP client runs LLM completions
-   on adclip's behalf. No key. Only works under clients that implement
-   sampling.
-
-3. **Direct Anthropic API** (`AnthropicProvider`) — opt-in only, for
-   users with a key who want ~3x faster per-call latency. Never a
-   default. Also gated behind `ADCLIP_ALLOW_LIVE_APIS=1` so a stray
-   key in the environment doesn't silently bill you.
-
-## Testing
-
-Use `--llm fake` / `provider_name="fake"` in tests. `FakeLLMProvider` is
-deterministic and sync-safe via `asyncio.run`.
-
-## If you hit an LLM error
-
-- "ANTHROPIC_API_KEY not set": you instantiated `AnthropicProvider`
-  somewhere. Replace with `default_provider()` or `ClaudeCliProvider()`.
-- "sampling provider requires an MCP session": you're outside an MCP
-  session (e.g., CLI context). Use `ClaudeCliProvider` or pass `--llm
-  claude-cli` explicitly.
-- "claude CLI failed": check `which claude` and that subscription auth
-  is active (`claude -p "hello"` should return a response).
-
-## Scope for contributors
-
-- Static ads + text ads (v0.1)
-- Self-review loops: judge + heal + semantic policy (v0.2)
-- Keyless CLI via claude subprocess (v0.3)
-- Full MCP tool surface: 12 tools — brief/cost/format, copy, policy,
-  generate_copy, generate_visuals, generate_variants, render_variant,
-  regenerate, score_variants, campaign_status, export_dco
-- Video pipeline, adversarial critic: deferred (see v0.x plans)
+S1 remains SQLite persistence, content-addressed artifacts, stable IDs/Manifest
+v2, and durable resumable jobs. Route selection, email campaign/message state,
+endpoint class, prompt version, parameters, cost, latency, retries, and artifact
+hashes must become authoritative per-asset provenance.

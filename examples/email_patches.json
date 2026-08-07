@@ -1,0 +1,13 @@
+[
+  {
+    "block_id": "body_1",
+    "op": "replace_text",
+    "find": "small team",
+    "value": "lean team"
+  },
+  {
+    "block_id": "cta",
+    "op": "set_link",
+    "href": "https://example.com/trial?utm_source=email"
+  }
+]

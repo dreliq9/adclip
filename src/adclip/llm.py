@@ -1,12 +1,9 @@
-"""LLM copy generation. Pluggable async provider interface.
+"""Legacy text-provider implementations and compatibility names.
 
-Providers:
-- SamplingLLMProvider: delegates to the calling MCP client (Claude Code)
-  via MCP's sampling/createMessage. No API key required on adclip's side.
-  This is the default when running as an MCP server.
-- AnthropicProvider: direct Anthropic API call. Requires ANTHROPIC_API_KEY.
-  Use for CLI/standalone mode without a sampling-capable MCP host.
-- FakeLLMProvider: deterministic, for tests.
+New provider-neutral code should import ``TextGenerationProvider`` from
+``adclip.providers.contracts`` and resolve adapters through the registry.
+``LLMProvider`` remains an alias so existing modules and integrations continue
+to work.
 """
 
 from __future__ import annotations
@@ -14,16 +11,16 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Protocol
+
+from adclip.providers.contracts import TextGenerationProvider
 
 
-class LLMProvider(Protocol):
-    async def generate(self, prompt: str, n: int) -> str:
-        """Return raw text containing a JSON block with `candidates` array."""
-        ...
+LLMProvider = TextGenerationProvider
 
 
 class AnthropicProvider:
+    provider_name = "anthropic"
+
     def __init__(self, model: str = "claude-sonnet-4-6"):
         from adclip._live_apis import require_live_apis
 
@@ -34,16 +31,15 @@ class AnthropicProvider:
         if not os.environ.get("ANTHROPIC_API_KEY"):
             raise RuntimeError(
                 "AnthropicProvider requires ANTHROPIC_API_KEY, which this "
-                "project normally does not use. Keyless alternatives: "
-                "(1) use MCP sampling via Claude Code (see .mcp.json), or "
-                "(2) use ClaudeCliProvider (default on the CLI). "
-                "See CLAUDE.md in the repo root for details."
+                "project normally does not use. Select another registered "
+                "text provider or configure a local OpenAI-compatible endpoint."
             )
         self._client = anthropic.Anthropic()
         self._model = model
+        self.model_name = model
 
     async def generate(self, prompt: str, n: int) -> str:
-        # anthropic SDK call is sync; run in the default thread pool.
+        del n
         import asyncio
 
         def _call() -> str:
@@ -52,16 +48,26 @@ class AnthropicProvider:
                 max_tokens=2048,
                 messages=[{"role": "user", "content": prompt}],
             )
-            parts = [b.text for b in msg.content if getattr(b, "type", "") == "text"]
+            parts = [
+                block.text
+                for block in msg.content
+                if getattr(block, "type", "") == "text"
+            ]
             return "\n".join(parts)
 
         return await asyncio.to_thread(_call)
 
 
 class FakeLLMProvider:
-    """Deterministic provider for tests. Returns n scripted candidates."""
+    """Deterministic provider for tests. Returns ``n`` scripted candidates."""
+
+    provider_name = "fake"
+
+    def __init__(self, model: str = "fake-v1") -> None:
+        self.model_name = model
 
     async def generate(self, prompt: str, n: int) -> str:
+        del prompt
         candidates = [
             {
                 "headline": f"Headline {i+1}",
@@ -74,18 +80,17 @@ class FakeLLMProvider:
 
 
 class SamplingLLMProvider:
-    """Delegate LLM calls back to the MCP client via sampling/createMessage.
+    """Delegate text generation to an MCP sampling-capable host."""
 
-    adclip never talks to an LLM API directly in this mode — it asks the
-    calling client (e.g. Claude Code) to run the completion. No API key.
-    """
+    provider_name = "sampling"
+    model_name = None
 
     def __init__(self, session, max_tokens: int = 2048):
-        # session: mcp.server.session.ServerSession (from ctx.request_context.session)
         self._session = session
         self._max_tokens = max_tokens
 
     async def generate(self, prompt: str, n: int) -> str:
+        del n
         from mcp import types
 
         result = await self._session.create_message(
@@ -105,7 +110,8 @@ class SamplingLLMProvider:
         if getattr(content, "type", "") == "text":
             return content.text
         raise RuntimeError(
-            f"Sampling response has unexpected content type: {type(content).__name__}"
+            f"Sampling response has unexpected content type: "
+            f"{type(content).__name__}"
         )
 
 
@@ -113,20 +119,21 @@ _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
 def parse_copy_candidates(raw: str) -> list[dict]:
-    """Extract candidates array from an LLM response. Tolerates prose wrapping."""
+    """Extract candidates from a text response; tolerate prose wrapping."""
+
     match = _JSON_OBJECT_RE.search(raw)
     if not match:
-        raise ValueError(f"No JSON object found in LLM response: {raw[:200]}")
+        raise ValueError(f"No JSON object found in text response: {raw[:200]}")
     obj = json.loads(match.group(0))
-    cands = obj.get("candidates")
-    if not isinstance(cands, list):
-        raise ValueError(f"No 'candidates' array in LLM response: {obj}")
-    return cands
+    candidates = obj.get("candidates")
+    if not isinstance(candidates, list):
+        raise ValueError(f"No 'candidates' array in text response: {obj}")
+    return candidates
 
 
-def default_provider() -> LLMProvider:
-    """Return the default non-MCP provider. Keyless by construction —
-    uses the user's Claude Code subscription auth via subprocess.
-    """
-    from adclip.claude_cli import ClaudeCliProvider
-    return ClaudeCliProvider()
+def default_provider() -> TextGenerationProvider:
+    """Resolve the configured standalone default through the registry."""
+
+    from adclip.providers.registry import default_text_registry
+
+    return default_text_registry().resolve("default")

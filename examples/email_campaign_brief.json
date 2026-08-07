@@ -1,0 +1,33 @@
+{
+  "name": "Widget trial sequence",
+  "product": "Widget",
+  "value_prop": "Test new workflows in minutes instead of rebuilding them from scratch.",
+  "audience": "Small product and operations teams",
+  "objective": "Drive qualified 14-day trials",
+  "tone": "specific, practical, and low-hype",
+  "offer": "14-day trial",
+  "cta": "Start the trial",
+  "landing_page_url": "https://example.com/trial",
+  "sender_name": "Acme",
+  "sender_email": "hello@example.com",
+  "reply_to": "team@example.com",
+  "campaign_type": "marketing",
+  "sequence_length": 3,
+  "cadence_days": [
+    0,
+    2,
+    5
+  ],
+  "brand_colors": [
+    "#111827",
+    "#2563EB",
+    "#F3F4F6"
+  ],
+  "unsubscribe_url": "{{unsubscribe_url}}",
+  "physical_address": "{{physical_address}}",
+  "must_avoid": [
+    "guaranteed",
+    "last chance"
+  ],
+  "output_dir": "adclip_email_out"
+}
