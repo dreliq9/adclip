@@ -1,0 +1,26 @@
+{
+  "id": "winback_email_03",
+  "name": "Reactivation offer",
+  "delay_days": 9,
+  "subject": "Free shipping on your next box",
+  "preheader": "Restart when it makes sense and we will cover shipping on the next one.",
+  "blocks": [
+    {
+      "id": "headline",
+      "kind": "heading",
+      "text": "Come back with free shipping"
+    },
+    {
+      "id": "body",
+      "kind": "paragraph",
+      "text": "If you are ready to restart, free shipping is applied to your next subscription box. No countdown language, just a straightforward reason to come back."
+    },
+    {
+      "id": "cta",
+      "kind": "button",
+      "text": "Restart your subscription",
+      "href": "https://example.com/restart"
+    }
+  ],
+  "tags": ["winback", "offer"]
+}

@@ -1,0 +1,31 @@
+{
+  "product": "Daymark Habit Tracker",
+  "value_prop": "A lightweight habit tracker that turns a few daily routines into a clear, simple streak view.",
+  "audience": "Adults who want more consistency without a complicated productivity system.",
+  "angles": [
+    "10-minute morning routine",
+    "simple streak visibility",
+    "less planning overhead",
+    "free-trial challenge"
+  ],
+  "tone": "energetic, concrete, encouraging, not preachy",
+  "cta": "Start free",
+  "formats": [
+    "tiktok_9x16",
+    "stories_reels_9x16",
+    "youtube_shorts_9x16",
+    "meta_feed_4x5"
+  ],
+  "variants": 4,
+  "pool_size": 8,
+  "variant_strategy": "angles",
+  "policy_profile": "default",
+  "must_include": [],
+  "must_avoid": [
+    "change your life overnight",
+    "guaranteed results",
+    "never fail again",
+    "scientifically proven"
+  ],
+  "output_dir": "adclip_mobile_app_acquisition"
+}

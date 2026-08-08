@@ -1,0 +1,26 @@
+{
+  "id": "winback_email_01",
+  "name": "Rediscovery reminder",
+  "delay_days": 0,
+  "subject": "Ready for another bag?",
+  "preheader": "Your subscription is flexible whenever you want to restart it.",
+  "blocks": [
+    {
+      "id": "headline",
+      "kind": "heading",
+      "text": "Coffee when you want it"
+    },
+    {
+      "id": "body",
+      "kind": "paragraph",
+      "text": "Morning Harbor subscriptions are easy to restart, skip, or adjust. If your routine is ready for coffee again, your next box can be too."
+    },
+    {
+      "id": "cta",
+      "kind": "button",
+      "text": "Restart your subscription",
+      "href": "https://example.com/restart"
+    }
+  ],
+  "tags": ["winback", "reminder"]
+}
