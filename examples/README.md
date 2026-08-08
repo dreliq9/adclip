@@ -1,145 +1,69 @@
 # adclip examples
 
-These examples are intended to be runnable, inspectable demonstrations of the
-current product surface. Unless a section explicitly says otherwise, they can be
-used without paid APIs or live marketing accounts.
+These examples are organized around marketing problems rather than internal subsystems. The goal is to let a marketer, agency, or growth team scan the repository and quickly recognize a campaign they might actually run.
 
-## Creative generation
+Unless a section explicitly says otherwise, the examples can be exercised with fake providers and without a live marketing account.
 
-### `portable_power_brief.json`
+## Portfolio
 
-A neutral cross-channel campaign brief covering:
+| Example | Business problem | Channels / surface | What it demonstrates |
+| --- | --- | --- | --- |
+| [`01-dtc-skincare`](01-dtc-skincare/) | Product launch and first purchase | Meta, Reels, TikTok, Google, email | Canonical cross-channel campaign |
+| [`02-b2b-saas-lead-gen`](02-b2b-saas-lead-gen/) | Qualified demo generation | LinkedIn, Google Search | B2B message adaptation |
+| [`03-local-service-lead-gen`](03-local-service-lead-gen/) | Same-day local leads | Meta, Google Search | Direct-response/local agency work |
+| [`04-subscription-winback`](04-subscription-winback/) | Reactivate lapsed subscribers | Email | Lifecycle retention and offers |
+| [`05-mobile-app-acquisition`](05-mobile-app-acquisition/) | Free-trial acquisition | TikTok, Reels, Shorts, Meta | Short-form video routing |
+| [`06-creative-experiment`](06-creative-experiment/) | Learn which hook works better | Synthetic Meta observations | Lineage, evidence, experiment, next test |
 
-- Meta 4:5 static creative;
-- Google responsive search ad copy;
-- Stories/Reels short-form video;
-- LinkedIn static creative.
+## Recommended starting point
 
-Run it safely with deterministic providers:
+Start with the DTC skincare launch:
 
 ```bash
-adclip run examples/portable_power_brief.json \
+adclip run examples/01-dtc-skincare/brief.json \
   --text-provider fake \
   --image-provider fake \
   --video-provider fake
 ```
 
-This is the recommended first campaign example because it exercises static,
-text, and video paths in one run without a regulated-policy profile.
-
-### `taichi_brief.json`
-
-A smaller crypto-policy example retained for compatibility and policy testing.
-It is useful when exercising `must_avoid`, policy profiles, healing, and judge
-behavior. It is not the primary onboarding example.
-
-## Email authoring
-
-### `email_campaign_brief.json`
-
-A complete structured email campaign brief. Generate a deterministic campaign:
+Then generate the matching email sequence:
 
 ```bash
-adclip email generate examples/email_campaign_brief.json --provider fake
+adclip email generate \
+  examples/01-dtc-skincare/email_brief.json \
+  --provider fake
 ```
 
-### `email_message.json`
+That gives one coherent business case across paid creative and owned email.
 
-A single structured message that can be rendered without any model call:
+## See the learning loop
+
+The dedicated creative-testing example uses the same product category so the transition from creation to evidence feels continuous:
 
 ```bash
-adclip email render \
-  examples/email_campaign_brief.json \
-  examples/email_message.json \
-  --output-dir ./adclip_email_render
+python examples/06-creative-experiment/build_demo.py
 ```
 
-### `email_lint_context.json`
+The builder creates exact control/treatment artifacts, synthetic deployment mappings, normalized observations, and one CTR hypothesis. It prints the experiment ID and commands for reporting, evaluation, and next-test recommendation.
 
-Campaign-aware context for HTML linting:
+The data is synthetic and deliberately favors the treatment. A `supported` result still keeps `causal_claim: false`; the example demonstrates adclip's evidence contract rather than pretending a fixture proves real-world causal lift.
 
-```bash
-adclip email lint ./adclip_email_render/email.html \
-  --context examples/email_lint_context.json \
-  --plain-text ./adclip_email_render/email.txt
-```
+## Other checked-in fixtures
 
-### `email_patches.json`
+The older flat files remain useful as lower-level examples and compatibility fixtures:
 
-Block-targeted structural edits:
+- `email_campaign_brief.json` — generic email-campaign schema example;
+- `email_message.json` — one structured email message;
+- `email_lint_context.json` — campaign-aware lint context;
+- `email_patches.json` — stable block-targeted edits;
+- `taichi_brief.json` — crypto policy/healing example.
 
-```bash
-adclip email patch-message \
-  examples/email_message.json \
-  examples/email_patches.json \
-  --output ./adclip_email_message_edited.json
-```
-
-## Performance and experiments
-
-### `build_performance_demo.py`
-
-Builds a complete synthetic campaign learning bundle locally:
-
-```text
-campaign + exact creative hashes
-  -> deployment records
-  -> normalized observations
-  -> explicit hook experiment
-  -> confidence-gated evaluation
-  -> next-test recommendation
-```
-
-Run:
-
-```bash
-python examples/build_performance_demo.py
-```
-
-Then inspect the generated `./adclip_performance_demo` directory:
-
-```bash
-adclip performance report ./adclip_performance_demo \
-  --since 2026-08-01 \
-  --until 2026-08-07 \
-  --action-report-time conversion
-
-adclip performance compare ./adclip_performance_demo \
-  --since 2026-08-01 \
-  --until 2026-08-07 \
-  --action-report-time conversion \
-  --metric ctr
-```
-
-The builder prints an `exp_...` ID. Use it for:
-
-```bash
-adclip performance experiment-evaluate ./adclip_performance_demo \
-  --experiment-id exp_... \
-  --since 2026-08-01 \
-  --until 2026-08-07
-
-adclip performance next-test ./adclip_performance_demo \
-  --experiment-id exp_... \
-  --since 2026-08-01 \
-  --until 2026-08-07
-```
-
-The data is synthetic and deliberately favors the treatment. A supported
-hypothesis is still returned with `causal_claim: false` because this example is
-about evidence mechanics, not proof of real-world causality.
+They are not the primary marketer-facing onboarding path.
 
 ## Safety
 
-For local examples, leave this unset:
+Keep `ADCLIP_ALLOW_LIVE_APIS` unset when following the examples with fake providers.
 
-```text
-ADCLIP_ALLOW_LIVE_APIS
-```
+The fake providers, email renderer/linter/editor, and synthetic creative-test demo make no paid model calls. `examples/06-creative-experiment/build_demo.py` does not contact Meta or any other external service.
 
-The fake providers, email renderer/linter/editor, and synthetic performance demo
-make no paid model calls. `build_performance_demo.py` does not contact Meta or
-any other external service.
-
-See [`../docs/QUICKSTART.md`](../docs/QUICKSTART.md) for the guided path through
-these examples.
+See [`../docs/QUICKSTART.md`](../docs/QUICKSTART.md) for the guided walkthrough.
