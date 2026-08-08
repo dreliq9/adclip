@@ -58,7 +58,9 @@ last sync time
 ```
 
 The mapping is explicit. adclip does not guess that visually similar files are
-the same creative.
+the same creative. A Meta account/ad pair may not be silently relinked to a
+different local creative; the second link is rejected rather than overwriting
+historical lineage.
 
 ## Portable storage
 
@@ -74,8 +76,8 @@ campaign/
     experiments.json
 ```
 
-Re-syncing the same deployment and exact date window replaces the deterministic
-observation record rather than duplicating it.
+Re-syncing the same deployment, exact date window, and action-reporting time
+replaces the deterministic observation record rather than duplicating it.
 
 ## Meta read-only connector
 
@@ -83,6 +85,9 @@ The Meta adapter only implements HTTP GET. It reads:
 
 1. explicit linked-ad metadata for identity verification;
 2. `/{ad_id}/insights` for the requested date window.
+
+Sync verifies both the returned account ID and returned ad ID before accepting
+observations.
 
 Normalized metrics include:
 
@@ -96,6 +101,7 @@ actions[action_type]
 action_values[action_type]
 video thruplay / 25 / 50 / 75 / 95 / 100 percent metrics
 currency
+action_report_time
 ```
 
 Platform action names remain intact instead of being guessed into a universal
@@ -145,26 +151,36 @@ export ADCLIP_META_ACCESS_TOKEN=...
 
 adclip performance sync-meta ./campaign \
   --since 2026-08-01 \
-  --until 2026-08-07
+  --until 2026-08-07 \
+  --action-report-time conversion
 ```
 
-Report:
+A stored measurement window is the tuple:
 
-```bash
-adclip performance report ./campaign
+```text
+(since, until, action_report_time)
 ```
 
-Without dates, adclip selects the latest exact stored window rather than
-silently adding overlapping periods.
-
-Compare descriptively:
+`conversion` and `impression` attribution rows for the same dates are never
+silently summed. If an explicit date range has more than one stored
+`action_report_time`, report/compare require an explicit selector:
 
 ```bash
+adclip performance report ./campaign \
+  --since 2026-08-01 \
+  --until 2026-08-07 \
+  --action-report-time conversion
+
 adclip performance compare ./campaign \
   --since 2026-08-01 \
   --until 2026-08-07 \
+  --action-report-time conversion \
   --metric ctr
 ```
+
+Without dates, adclip chooses the latest exact date window and prefers its
+`conversion` attribution row when present. If the latest dates contain multiple
+non-conversion attribution modes, the caller must choose explicitly.
 
 Initial descriptive metrics:
 
@@ -200,6 +216,10 @@ minimum denominator/events per arm
 confidence level
 ```
 
+Factor values are included in the deterministic experiment identity so
+re-declaring the same creatives/factor/metric with different treatment/control
+values cannot silently overwrite an earlier record.
+
 Create one:
 
 ```bash
@@ -234,8 +254,8 @@ adclip performance next-test ./campaign \
 
 ### Evidence semantics
 
-Inferential verdicts are limited to rates with explicit aggregate numerators and
-denominators:
+Inferential verdicts are limited to controlled rate comparisons with explicit
+aggregate numerators and denominators:
 
 ```text
 CTR            clicks / impressions
@@ -244,9 +264,23 @@ action rate    actions / clicks
 ```
 
 Each arm receives a Wilson interval and the treatment-control difference uses a
-Newcombe-style Wilson interval. Both arms must meet the experiment's declared
-minimum denominator and event thresholds before output may say `supported` or
-`contradicted`.
+conservative Newcombe-style Wilson bound construction. Both arms must meet the
+experiment's declared minimum denominator and event thresholds before output may
+say `supported` or `contradicted`. If an action count exceeds its click
+denominator, binomial action-rate inference is refused.
+
+`observational_comparison` remains descriptive even when the rate confidence
+interval excludes zero:
+
+```text
+inferential: false
+verdict: inconclusive
+reason: observational_comparison_is_descriptive_only
+```
+
+Its intervals may still be returned for inspection, but the next-test planner
+routes the user toward a stronger measurement design rather than declaring a
+winner.
 
 CPA and ROAS remain descriptive because aggregate totals do not provide enough
 variance information for a responsible confidence interval.
@@ -289,6 +323,9 @@ adclip_performance_report
 adclip_performance_compare
 ```
 
+`adclip_performance_report` and `adclip_performance_compare` accept
+`action_report_time` for attribution-window disambiguation.
+
 Experiments:
 
 ```text
@@ -302,14 +339,18 @@ CLI and MCP share transport-neutral application services.
 
 ## Interpretation rules
 
-- Exact windows are compared against exact windows.
-- Overlapping windows are stored but not silently summed.
+- Exact `(since, until, action_report_time)` windows are compared to exact
+  windows.
+- Different attribution reporting times are never silently added together.
+- Overlapping date periods are stored but not silently summed.
 - Rankings alone never establish causal lift.
-- Experiment verdicts require declared minimum evidence.
+- Observational comparisons never receive inferential supported/contradicted
+  verdicts.
+- Controlled experiment verdicts require declared minimum evidence.
 - CPA/ROAS direction is not statistical significance.
 - Meta reach is not additive across ads.
-- Attribution/reporting-time differences remain visible.
 - Regenerated creative bytes receive new creative identities.
+- One external Meta ad cannot silently change which local creative it represents.
 
 ## Next steps
 
