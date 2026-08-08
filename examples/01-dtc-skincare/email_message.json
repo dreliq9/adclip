@@ -1,0 +1,33 @@
+{
+  "id": "launch_email_01",
+  "name": "Launch introduction",
+  "delay_days": 0,
+  "subject": "A simpler daily moisturizer",
+  "preheader": "Lightweight moisture, no added fragrance, 20% off your first order.",
+  "blocks": [
+    {
+      "id": "headline",
+      "kind": "heading",
+      "text": "Daily moisture, kept simple",
+      "align": "left"
+    },
+    {
+      "id": "body_1",
+      "kind": "paragraph",
+      "text": "Morrow Daily Barrier Moisturizer pairs ceramides and squalane in a lightweight, fragrance-free formula designed for an easy everyday routine."
+    },
+    {
+      "id": "offer",
+      "kind": "paragraph",
+      "text": "Get 20% off your first order."
+    },
+    {
+      "id": "cta",
+      "kind": "button",
+      "text": "Shop the moisturizer",
+      "href": "https://example.com/morrow-moisturizer",
+      "align": "left"
+    }
+  ],
+  "tags": ["launch", "offer"]
+}
