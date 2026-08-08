@@ -1,0 +1,29 @@
+{
+  "name": "Morrow moisturizer launch",
+  "product": "Morrow Daily Barrier Moisturizer",
+  "value_prop": "A lightweight, fragrance-free daily moisturizer with ceramides and squalane for dry or sensitive skin.",
+  "audience": "Adults 25-40 considering a simpler daily moisturizer.",
+  "objective": "Drive first purchases from launch traffic and warm subscribers.",
+  "tone": "calm, modern, specific, low-hype",
+  "offer": "20% off first order",
+  "cta": "Shop the moisturizer",
+  "landing_page_url": "https://example.com/morrow-moisturizer",
+  "sender_name": "Morrow",
+  "sender_email": "hello@example.com",
+  "reply_to": "care@example.com",
+  "campaign_type": "marketing",
+  "sequence_length": 3,
+  "cadence_days": [0, 2, 5],
+  "brand_colors": ["#F6F0E8", "#3F5147", "#D8C8B8"],
+  "unsubscribe_url": "{{unsubscribe_url}}",
+  "physical_address": "{{physical_address}}",
+  "must_include": ["20% off first order"],
+  "must_avoid": [
+    "cures eczema",
+    "clinically proven",
+    "guaranteed results",
+    "miracle",
+    "reverse aging"
+  ],
+  "output_dir": "adclip_skincare_email"
+}
