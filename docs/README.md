@@ -11,6 +11,8 @@ recommendations. This page is the map for that surface.
   render email, and exercise the synthetic learning loop.
 - [`../examples/README.md`](../examples/README.md) — runnable example catalog.
 - [`../README.md`](../README.md) — product overview and command reference.
+- [`../LLM.md`](../LLM.md) — model-neutral implementation guidance for AI agents
+  and contributors working on the repository.
 
 ## Product and architecture
 
