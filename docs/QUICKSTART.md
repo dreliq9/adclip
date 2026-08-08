@@ -61,30 +61,29 @@ adclip route-recommend video --multi-shot
 
 A route selects a current primary provider/model/options tuple. Explicit provider/model arguments still override the route.
 
-## 4. Generate the matching launch email sequence
+## 4. Render the matching launch email locally
 
-Use the same product, audience, offer, and claim boundaries in the owned-channel sequence:
-
-```bash
-adclip email generate \
-  examples/01-dtc-skincare/email_brief.json \
-  --provider fake
-```
-
-For lower-level rendering/editing examples, the checked-in generic message fixtures still support:
+The skincare example includes a structured campaign brief and one checked-in launch message. Rendering requires no model call:
 
 ```bash
 adclip email render \
-  examples/email_campaign_brief.json \
-  examples/email_message.json \
-  --output-dir ./adclip_email_render
-
-adclip email lint ./adclip_email_render/email.html \
-  --context examples/email_lint_context.json \
-  --plain-text ./adclip_email_render/email.txt
+  examples/01-dtc-skincare/email_brief.json \
+  examples/01-dtc-skincare/email_message.json \
+  --output-dir ./adclip_skincare_email_render
 ```
 
-Email delivery remains a connector boundary. The native slice owns structured messages, HTML/text rendering, linting, edits, and portable campaign state.
+The output contains responsive HTML, plain text, headers, and lint metadata.
+
+For lower-level editing examples, the generic checked-in fixtures still support:
+
+```bash
+adclip email patch-message \
+  examples/email_message.json \
+  examples/email_patches.json \
+  --output ./adclip_email_message_edited.json
+```
+
+`email_brief.json` is also ready for provider-neutral sequence generation when a compatible text provider is configured. The generic `fake` text provider is intentionally a copy-generation fixture, not an email-sequence generator.
 
 ## 5. Build a complete synthetic creative experiment
 
