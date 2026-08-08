@@ -8,20 +8,23 @@
 
 This example focuses on owned-channel lifecycle marketing rather than acquisition creative.
 
-Generate the sequence locally:
-
-```bash
-adclip email generate \
-  examples/04-subscription-winback/email_brief.json \
-  --provider fake
-```
-
-The intended sequence is:
+The checked-in sequence is:
 
 ```text
-1. reminder / product rediscovery
-2. value reinforcement
-3. incentive
+1. email_01_reminder.json   reminder / product rediscovery
+2. email_02_value.json      value reinforcement
+3. email_03_offer.json      incentive
 ```
+
+Render any message locally with the same campaign brief. For example:
+
+```bash
+adclip email render \
+  examples/04-subscription-winback/email_brief.json \
+  examples/04-subscription-winback/email_03_offer.json \
+  --output-dir ./adclip_winback_email_render
+```
+
+`email_brief.json` is also ready for sequence generation when a compatible text provider is configured.
 
 A marketer could later compare free shipping versus a percentage discount as separate campaign hypotheses while keeping the rest of the sequence controlled.
