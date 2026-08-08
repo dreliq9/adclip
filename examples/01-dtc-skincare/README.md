@@ -13,7 +13,7 @@ This is the canonical adclip example because it looks like a normal performance-
 ```text
 campaign brief
   -> cross-channel copy / static / short-form video
-  -> launch email sequence
+  -> structured launch email
   -> exact creative lineage
   -> deployment observations
   -> hook experiment
@@ -29,13 +29,16 @@ adclip run examples/01-dtc-skincare/brief.json \
   --video-provider fake
 ```
 
-Generate the launch email sequence without a paid API:
+Render the checked-in launch email without any model call:
 
 ```bash
-adclip email generate \
+adclip email render \
   examples/01-dtc-skincare/email_brief.json \
-  --provider fake
+  examples/01-dtc-skincare/email_message.json \
+  --output-dir ./adclip_skincare_email_render
 ```
+
+`email_brief.json` also serves as a provider-neutral sequence brief when a compatible text provider is configured.
 
 The dedicated learning demo in [`../06-creative-experiment`](../06-creative-experiment/) uses the same product category and tests a concrete hook hypothesis against synthetic performance observations.
 
