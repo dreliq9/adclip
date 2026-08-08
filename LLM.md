@@ -325,7 +325,7 @@ Recommended local validation:
 ```bash
 python -m pytest
 python -m compileall src/adclip
-python examples/build_performance_demo.py
+python examples/06-creative-experiment/build_demo.py
 ```
 
 ## Current priority
