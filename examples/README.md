@@ -2,7 +2,7 @@
 
 These examples are organized around marketing problems rather than internal subsystems. The goal is to let a marketer, agency, or growth team scan the repository and quickly recognize a campaign they might actually run.
 
-Unless a section explicitly says otherwise, the examples can be exercised with fake providers and without a live marketing account.
+Unless a section explicitly says otherwise, the examples can be exercised with fake providers or checked-in artifacts and without a live marketing account.
 
 ## Portfolio
 
@@ -26,15 +26,16 @@ adclip run examples/01-dtc-skincare/brief.json \
   --video-provider fake
 ```
 
-Then generate the matching email sequence:
+Then render the matching checked-in launch email with no model call:
 
 ```bash
-adclip email generate \
+adclip email render \
   examples/01-dtc-skincare/email_brief.json \
-  --provider fake
+  examples/01-dtc-skincare/email_message.json \
+  --output-dir ./adclip_skincare_email_render
 ```
 
-That gives one coherent business case across paid creative and owned email.
+That gives one coherent business case across paid creative and owned email. The email brief can also be passed to sequence generation when a compatible text provider is configured.
 
 ## See the learning loop
 
@@ -64,6 +65,6 @@ They are not the primary marketer-facing onboarding path.
 
 Keep `ADCLIP_ALLOW_LIVE_APIS` unset when following the examples with fake providers.
 
-The fake providers, email renderer/linter/editor, and synthetic creative-test demo make no paid model calls. `examples/06-creative-experiment/build_demo.py` does not contact Meta or any other external service.
+The fake creative providers, email renderer/linter/editor, and synthetic creative-test demo make no paid model calls. `examples/06-creative-experiment/build_demo.py` does not contact Meta or any other external service.
 
 See [`../docs/QUICKSTART.md`](../docs/QUICKSTART.md) for the guided walkthrough.
