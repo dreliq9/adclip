@@ -6,7 +6,7 @@
 ## Purpose
 
 adclip should learn from marketing performance without pretending that every
-observed winner proves a causal effect. This layer records the hypothesis before
+observed winner proves a causal effect. This layer records hypotheses before
 interpretation, snapshots the exact creative artifacts being compared, applies
 minimum-evidence rules, and separates inferential rate evidence from descriptive
 value metrics.
@@ -52,6 +52,11 @@ The two arms snapshot `creative_id` and `artifact_sha256`. If a variant is
 regenerated later, that replacement artifact receives a different creative ID
 and cannot silently inherit the experiment evidence.
 
+The deterministic experiment ID also includes both declared factor values. The
+same creative pair, factor name, metric, and action type can therefore be
+re-declared with different factor values without silently overwriting the
+previous experiment.
+
 ## Designs
 
 ### `controlled_single_factor`
@@ -61,12 +66,25 @@ current implementation requires matching output formats so a placement-format
 change cannot accidentally masquerade as a hook, offer, proof, or visual test.
 
 This is still a **declared** single-factor design. adclip does not yet prove that
-all other creative attributes or delivery conditions were identical.
+all other creative attributes or delivery conditions were identical or
+randomized.
 
 ### `observational_comparison`
 
 Use when the two creatives were not intentionally isolated as one changed
-factor. The output is explicitly descriptive.
+factor. The output is always descriptive. Even if a rate confidence interval
+excludes zero, this design returns:
+
+```text
+descriptive_only: true
+inferential: false
+verdict: inconclusive
+reason: observational_comparison_is_descriptive_only
+causal_claim: false
+```
+
+Intervals may still be attached for inspection. The next-test planner responds
+with `improve_measurement_design` rather than promoting an observational winner.
 
 ## Primary metrics
 
@@ -91,8 +109,8 @@ separately. `action_type` is required for action rate, CPA, and ROAS.
 
 ## Inferential boundary
 
-Confidence intervals are currently produced only for rate metrics whose
-numerator and denominator are available from aggregate observations:
+Confidence intervals are currently produced only for controlled rate metrics
+whose numerator and denominator are available from aggregate observations:
 
 ```text
 CTR            clicks / impressions
@@ -101,7 +119,7 @@ action rate    actions / clicks
 ```
 
 Each arm receives a Wilson proportion interval. The difference interval uses a
-conservative Newcombe-style Wilson construction:
+conservative Newcombe-style Wilson bound construction:
 
 ```text
 treatment Wilson lower - control Wilson upper
@@ -110,7 +128,9 @@ treatment Wilson upper - control Wilson lower
 ```
 
 A hypothesis can receive `supported` or `contradicted` only after both arms meet
-the declared denominator and event thresholds.
+the declared denominator and event thresholds. If a selected action count is
+greater than clicks, adclip refuses binomial action-rate inference instead of
+clamping the rate into a valid-looking interval.
 
 For an expected increase:
 
@@ -121,6 +141,19 @@ otherwise                           -> inconclusive
 ```
 
 The signs reverse when lower is the expected direction.
+
+## Measurement context
+
+Experiment arms must use compatible platform and `action_report_time` values.
+The performance layer treats the exact measurement window as:
+
+```text
+(since, until, action_report_time)
+```
+
+Different attribution reporting modes must not be added together. Report and
+compare surfaces expose an explicit `action_report_time` selector when the same
+dates have multiple stored modes.
 
 ## Value metrics remain descriptive
 
@@ -145,10 +178,10 @@ This foundation always emits:
 causal_claim: false
 ```
 
-Even a declared single-factor creative test may still have delivery,
-audience, auction, attribution, timing, or placement confounding. Future support
-for verified randomized assignment can introduce a stronger causal contract,
-but it must be explicit rather than inferred from two ad IDs.
+Even a declared single-factor creative test may still have delivery, audience,
+auction, attribution, timing, or placement confounding. Future support for
+verified randomized assignment can introduce a stronger causal contract, but it
+must be explicit rather than inferred from two ad IDs.
 
 ## CLI workflow
 
@@ -190,16 +223,17 @@ Thresholds can be overridden explicitly:
 --confidence
 ```
 
-Defaults are conservative and metric-aware. CTR/outbound CTR default to 1,000
-denominator observations and 20 events per arm. Action rate defaults to 100
-clicks and 10 actions per arm.
+Defaults are metric-aware. CTR/outbound CTR default to 1,000 denominator
+observations and 20 events per arm. Action rate defaults to 100 clicks and 10
+actions per arm.
 
 ### 2. Sync an exact platform window
 
 ```bash
 adclip performance sync-meta ./campaign \
   --since 2026-08-01 \
-  --until 2026-08-07
+  --until 2026-08-07 \
+  --action-report-time conversion
 ```
 
 ### 3. Evaluate
@@ -211,6 +245,11 @@ adclip performance experiment-evaluate ./campaign \
   --until 2026-08-07
 ```
 
+If both attribution modes were synced for the same creative/date pair, the
+current experiment evaluator refuses the incompatible measurement context rather
+than combining them. A future experiment CLI selector may make that choice more
+convenient; today the stored experiment evidence must be unambiguous.
+
 ### 4. Ask for the next test
 
 ```bash
@@ -220,13 +259,14 @@ adclip performance next-test ./campaign \
   --until 2026-08-07
 ```
 
-The deterministic planner returns one of four broad actions:
+The deterministic planner can return:
 
 ```text
 replicate_supported_factor
 revise_changed_factor
 collect_more_evidence
 improve_measurement_design
+replicate_or_extend
 ```
 
 When the interval crosses zero despite meeting the minimum threshold, it
