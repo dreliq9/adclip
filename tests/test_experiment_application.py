@@ -127,3 +127,34 @@ def test_controlled_experiment_rejects_format_mismatch(tmp_path):
     )
     assert result["ok"] is False
     assert "matching formats" in result["error"]
+
+
+def test_factor_values_are_part_of_experiment_identity(tmp_path):
+    root = _campaign(tmp_path)
+    app = ExperimentApplication()
+    first = app.create(
+        str(root),
+        name="Hook test A",
+        hypothesis="Hook A improves CTR",
+        changed_factor="hook",
+        control_variant_id="v01",
+        treatment_variant_id="v02",
+        control_value="plain benefit",
+        treatment_value="contrarian challenge",
+    )
+    second = app.create(
+        str(root),
+        name="Hook test B",
+        hypothesis="Hook B improves CTR",
+        changed_factor="hook",
+        control_variant_id="v01",
+        treatment_variant_id="v02",
+        control_value="plain benefit",
+        treatment_value="curiosity gap",
+    )
+    assert first["ok"] is True
+    assert second["ok"] is True
+    assert first["experiment"]["id"] != second["experiment"]["id"]
+    listed = app.list(str(root))
+    assert listed["ok"] is True
+    assert len(listed["experiments"]) == 2
