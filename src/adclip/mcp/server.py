@@ -1,4 +1,4 @@
-"""adclip MCP server — marketing creative and model-routing tools."""
+"""adclip MCP server — marketing creative, email, routing, and learning tools."""
 
 import logging
 import sys
@@ -21,6 +21,7 @@ def _register_all():
         copy_tools,
         dco_tools,
         email_tools,
+        performance_tools,
         pipeline_tools,
         regenerate_tools,
         render_tools,
@@ -40,6 +41,7 @@ def _register_all():
     dco_tools.register(mcp)
     routing_tools.register(mcp)
     email_tools.register(mcp)
+    performance_tools.register(mcp)
 
 
 _register_all()

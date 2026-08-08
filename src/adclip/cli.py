@@ -282,5 +282,7 @@ def bakeoff_cmd(
 
 
 from adclip.email.cli import email_group
+from adclip.performance.cli import performance_group
 
 main.add_command(email_group)
+main.add_command(performance_group)
