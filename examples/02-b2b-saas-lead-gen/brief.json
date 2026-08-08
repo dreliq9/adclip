@@ -1,0 +1,27 @@
+{
+  "product": "Northline Revenue Analytics",
+  "value_prop": "Connect CRM, ad-spend, and pipeline data into one revenue reporting view without rebuilding reports by hand.",
+  "audience": "Marketing directors at B2B SaaS companies with 50-500 employees.",
+  "angles": [
+    "save reporting time",
+    "prove marketing revenue impact",
+    "replace spreadsheet reconciliation"
+  ],
+  "tone": "credible, concise, financially literate",
+  "cta": "Book a demo",
+  "formats": [
+    "linkedin_single",
+    "google_rsa"
+  ],
+  "variants": 3,
+  "pool_size": 6,
+  "variant_strategy": "angles",
+  "policy_profile": "default",
+  "must_include": [],
+  "must_avoid": [
+    "guaranteed ROI",
+    "perfect attribution",
+    "100% accurate"
+  ],
+  "output_dir": "adclip_b2b_saas_lead_gen"
+}
