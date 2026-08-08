@@ -10,7 +10,14 @@ from adclip.performance.experiment import (
 from adclip.performance.schema import PerformanceMetrics, PerformanceObservation
 
 
-def _experiment(metric="ctr", *, expected="higher", action_type=None, thresholds=None):
+def _experiment(
+    metric="ctr",
+    *,
+    expected="higher",
+    action_type=None,
+    thresholds=None,
+    design="controlled_single_factor",
+):
     return ExperimentRecord(
         id="exp_" + "a" * 32,
         campaign_id="cmp_test",
@@ -34,6 +41,7 @@ def _experiment(metric="ctr", *, expected="higher", action_type=None, thresholds
         primary_metric=metric,
         action_type=action_type,
         expected_direction=expected,
+        design=design,
         thresholds=thresholds or EvidenceThresholds(
             min_denominator_per_arm=1000,
             min_events_per_arm=20,
@@ -114,6 +122,23 @@ def test_low_evidence_is_inconclusive():
     assert recommend_next_test(result)["action"] == "collect_more_evidence"
 
 
+def test_observational_comparison_never_returns_inferential_supported_verdict():
+    result = _evaluate(
+        _experiment(design="observational_comparison"),
+        [
+            _observation("crv_control", impressions=5000, clicks=100),
+            _observation("crv_treatment", impressions=5000, clicks=500),
+        ],
+    )
+    assert result["descriptive_only"] is True
+    assert result["inferential"] is False
+    assert result["verdict"] == "inconclusive"
+    assert result["reason"] == "observational_comparison_is_descriptive_only"
+    assert result["confidence"]["difference_interval"] is not None
+    assert result["causal_claim"] is False
+    assert recommend_next_test(result)["action"] == "improve_measurement_design"
+
+
 def test_action_rate_uses_clicks_as_denominator():
     experiment = _experiment(
         "action_rate",
@@ -144,6 +169,40 @@ def test_action_rate_uses_clicks_as_denominator():
     assert result["control"]["events"] == 20
     assert result["treatment"]["value"] == 0.25
     assert result["verdict"] == "supported"
+
+
+def test_action_rate_events_above_clicks_cannot_use_binomial_inference():
+    experiment = _experiment(
+        "action_rate",
+        action_type="purchase",
+        thresholds=EvidenceThresholds(
+            min_denominator_per_arm=100,
+            min_events_per_arm=10,
+        ),
+    )
+    result = _evaluate(
+        experiment,
+        [
+            _observation(
+                "crv_control",
+                impressions=5000,
+                clicks=200,
+                actions={"purchase": 20},
+            ),
+            _observation(
+                "crv_treatment",
+                impressions=5000,
+                clicks=200,
+                actions={"purchase": 250},
+            ),
+        ],
+    )
+    assert result["verdict"] == "inconclusive"
+    assert result["reason"] == "minimum_evidence_not_met"
+    assert any(
+        "exceed denominator" in item
+        for item in result["minimum_evidence"]["shortfalls"]
+    )
 
 
 def test_roas_stays_descriptive_without_variance_evidence():
