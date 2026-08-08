@@ -1,20 +1,40 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 from adclip.application.experiment_services import ExperimentApplication
 from adclip.application.performance_services import PerformanceApplication
+from adclip.schema import AdBrief
+
+
+ROOT = Path(__file__).parents[1]
 
 
 def _load_performance_demo_module():
-    path = Path(__file__).parents[1] / "examples" / "build_performance_demo.py"
+    path = ROOT / "examples" / "06-creative-experiment" / "build_demo.py"
     spec = importlib.util.spec_from_file_location("adclip_performance_demo", path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_marketing_brief_examples_validate():
+    paths = [
+        ROOT / "examples" / "01-dtc-skincare" / "brief.json",
+        ROOT / "examples" / "02-b2b-saas-lead-gen" / "brief.json",
+        ROOT / "examples" / "03-local-service-lead-gen" / "brief.json",
+        ROOT / "examples" / "05-mobile-app-acquisition" / "brief.json",
+    ]
+    for path in paths:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        brief = AdBrief.model_validate(payload)
+        assert brief.product
+        assert brief.audience
+        assert brief.formats
 
 
 def test_performance_demo_builds_and_evaluates_offline(tmp_path):
