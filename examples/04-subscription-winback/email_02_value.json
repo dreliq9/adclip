@@ -1,0 +1,26 @@
+{
+  "id": "winback_email_02",
+  "name": "Value reinforcement",
+  "delay_days": 4,
+  "subject": "Set the coffee schedule around you",
+  "preheader": "Skip, pause, or change frequency without rebuilding your subscription.",
+  "blocks": [
+    {
+      "id": "headline",
+      "kind": "heading",
+      "text": "A subscription that can change with your routine"
+    },
+    {
+      "id": "body",
+      "kind": "paragraph",
+      "text": "Choose the frequency that fits now, then skip or adjust later. The point is fresh coffee without turning delivery into another commitment to manage."
+    },
+    {
+      "id": "cta",
+      "kind": "button",
+      "text": "See your options",
+      "href": "https://example.com/restart"
+    }
+  ],
+  "tags": ["winback", "value"]
+}
