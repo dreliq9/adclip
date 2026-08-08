@@ -73,7 +73,7 @@ Python 3.11+ is required.
 ## Five-minute zero-cost demo
 
 Generate a fictional DTC skincare launch across Meta, Reels/TikTok, and Google
-using only fake providers:
+using only fake creative providers:
 
 ```bash
 adclip run examples/01-dtc-skincare/brief.json \
@@ -82,12 +82,13 @@ adclip run examples/01-dtc-skincare/brief.json \
   --video-provider fake
 ```
 
-Generate the matching launch email sequence:
+Render the matching checked-in launch email without a model call:
 
 ```bash
-adclip email generate \
+adclip email render \
   examples/01-dtc-skincare/email_brief.json \
-  --provider fake
+  examples/01-dtc-skincare/email_message.json \
+  --output-dir ./adclip_skincare_email_render
 ```
 
 Build a complete synthetic creative-test bundle:
@@ -213,16 +214,13 @@ contracts/adapters exist. See [Model routing](docs/MODEL_ROUTING.md).
 Email is native campaign state rather than a wrapper around one ESP.
 
 ```bash
-# Generate the canonical launch sequence
-adclip email generate examples/01-dtc-skincare/email_brief.json --provider fake
-
-# Render a checked-in structured message -> HTML + text + headers + lint
+# Render the canonical launch message locally
 adclip email render \
-  examples/email_campaign_brief.json \
-  examples/email_message.json \
+  examples/01-dtc-skincare/email_brief.json \
+  examples/01-dtc-skincare/email_message.json \
   --output-dir ./rendered-email
 
-# Apply stable block-level edits
+# Apply stable block-level edits to a generic fixture
 adclip email patch-message \
   examples/email_message.json \
   examples/email_patches.json \
@@ -230,8 +228,10 @@ adclip email patch-message \
 ```
 
 Generated campaigns contain portable message JSON, responsive HTML, plain text,
-headers, lint reports, and a manifest. Sending, consent, suppression, and ESP
-account state remain connector responsibilities.
+headers, lint reports, and a manifest. Sequence generation uses a configured
+text provider; the generic `fake` text provider is a copy-generation fixture,
+not an email-sequence generator. Sending, consent, suppression, and ESP account
+state remain connector responsibilities.
 
 See [Email campaigns](docs/EMAIL_CAMPAIGNS.md).
 
@@ -326,7 +326,7 @@ artifact SHA-256, failures, evaluation dimensions, and human-review fields.
 | `command` | Local executable over stdin/stdout |
 | `sampling` | Sampling-capable MCP host |
 | `anthropic` | Direct opt-in Anthropic API |
-| `fake` | Deterministic tests/examples |
+| `fake` | Deterministic copy tests/examples |
 
 Local HTTP inference:
 
