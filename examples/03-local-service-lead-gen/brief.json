@@ -1,6 +1,6 @@
 {
   "product": "ClearDay Heating & Cooling - same-day AC repair",
-  "value_prop": "Local AC repair with same-day appointment availability and straightforward scheduling.",
+  "value_prop": "Local AC repair for the Phoenix metro area with same-day appointment availability and straightforward scheduling.",
   "audience": "Homeowners in the Phoenix metro area whose air conditioner is not cooling properly.",
   "angles": [
     "same-day availability",
@@ -17,13 +17,11 @@
   "pool_size": 6,
   "variant_strategy": "angles",
   "policy_profile": "default",
-  "must_include": [
-    "Phoenix metro"
-  ],
+  "must_include": [],
   "must_avoid": [
     "guaranteed same-day fix",
     "cheapest in Phoenix",
-    "24/7" 
+    "24/7"
   ],
   "output_dir": "adclip_local_service_leads"
 }
