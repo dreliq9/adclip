@@ -2,64 +2,66 @@
 
 <!-- mcp-name: io.github.dreliq9/adclip -->
 
-**A standalone, model-routed marketing creative engine.** adclip turns a
-structured campaign brief into policy-checked copy, static images, short-form
-video, and responsive email campaigns for Meta, Google, LinkedIn, X, TikTok,
-YouTube, and inbox delivery. It can be used through its CLI, MCP server, and
-future local web workbench.
+**An open, standalone, model-routed marketing creative and learning engine.**
 
-adclip deliberately separates:
+adclip turns campaign intent into policy-checked copy, static creative,
+short-form video, and responsive email; preserves exact creative lineage; reads
+performance back from deployed creative; and structures that evidence into
+explicit experiments and next-test recommendations.
 
 ```text
-marketing task -> route/capability -> provider adapter -> model + options
+brief
+  -> copy / image / video / email
+  -> exact creative artifacts + provenance
+  -> deployment lineage
+  -> performance observations
+  -> experiment evidence
+  -> next test
 ```
 
-A campaign can request a text-heavy image, a bulk draft, a premium video, or a
-multi-message email sequence without hard-coding one vendor throughout the
-workflow. Routes select a current primary and expose ordered fallbacks;
-explicit provider/model overrides remain authoritative. Fallbacks are never run
-silently because another attempt may incur additional cost.
+MCP is one interface into adclip, not the architecture. The same application
+services are available to the standalone CLI and are intended to back a future
+local browser workbench.
 
-Architecture references:
+## Why adclip exists
 
-- [`docs/STANDALONE_ARCHITECTURE.md`](docs/STANDALONE_ARCHITECTURE.md)
-- [`docs/MODEL_PROVIDERS.md`](docs/MODEL_PROVIDERS.md)
-- [`docs/MODEL_ROUTING.md`](docs/MODEL_ROUTING.md)
-- [`docs/EMAIL_CAMPAIGNS.md`](docs/EMAIL_CAMPAIGNS.md)
+Most AI marketing stacks split the workflow across a copy tool, image/video
+generators, an email platform, ad-platform dashboards, and creative analytics.
+adclip's goal is to keep the **campaign model, creative lineage, and learning
+loop portable**, while letting model providers and delivery platforms remain
+replaceable adapters.
 
-## Current routes
+Core principles:
 
-| Modality | Route | Primary | Purpose |
-| --- | --- | --- | --- |
-| Image | `general` | fal / `gpt-image-2` medium | General marketing creative, layout, typography |
-| Image | `text-heavy` | fal / `gpt-image-2` high | Posters, diagrams, packaging, readable text |
-| Image | `bulk` | fal / `flux-2-pro` | Cost-controlled production batches |
-| Image | `draft` | fal / `nano-banana-2-lite` | Fast concept exploration |
-| Image | `brand-control` | fal / `flux-2-flex` | Controlled palettes and layouts |
-| Image | `premium` | direct OpenAI / `gpt-image-2` high | Highest-quality general render |
-| Video | `general` | fal / `kling-o3-standard` | Practical performance and social video |
-| Video | `premium` | fal / `veo-3.1` | Cinematic output with native audio |
-| Video | `multi-shot` | fal / `seedance-2-fast` | Directed multi-shot storytelling |
-| Video | `budget` | fal / `wan-2.7` | Lower-cost, flexible-duration exploration |
+- **Model-neutral:** workflows request capabilities/routes rather than hard-code
+  one model vendor.
+- **Standalone:** CLI workflows do not require an MCP host.
+- **Local-first:** local command and OpenAI-compatible inference can run offline
+  or air-gapped when configured appropriately.
+- **Portable:** campaign artifacts, email HTML/text, manifests, deployment
+  mappings, observations, and experiments remain inspectable files.
+- **Evidence-aware:** observational rankings are not silently presented as
+  causal lift.
+- **Spend-safe:** paid generation is opt-in and route fallbacks are not silently
+  executed.
 
-Reference-image editing, vectors, image-to-video, multi-reference video, and
-footage editing are already cataloged. They fail clearly until the required
-input contracts and provider adapters exist rather than pretending the current
-brief schema can support them.
+## Start here
 
-## Install
+For the current repository feature set, see:
+
+- **[Quickstart](docs/QUICKSTART.md)** — zero-cost creative, email, and learning
+  workflows.
+- **[Examples](examples/README.md)** — runnable fixtures and commands.
+- **[Documentation index](docs/README.md)** — architecture and capability docs.
+
+Install from PyPI:
 
 ```bash
 pipx install adclip
 ```
 
-Python 3.11+ is required. Direct Anthropic remains optional:
-
-```bash
-pipx install "adclip[anthropic]"
-```
-
-From source:
+The PyPI release can lag the current repository. For the exact `main` feature
+set documented here, install from source:
 
 ```bash
 git clone https://github.com/dreliq9/adclip.git
@@ -68,7 +70,68 @@ python3.11 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 ```
 
+Python 3.11+ is required.
+
+## Five-minute zero-cost demo
+
+Generate a cross-channel campaign using only fake providers:
+
+```bash
+adclip run examples/portable_power_brief.json \
+  --text-provider fake \
+  --image-provider fake \
+  --video-provider fake
+```
+
+Render a structured email locally:
+
+```bash
+adclip email render \
+  examples/email_campaign_brief.json \
+  examples/email_message.json \
+  --output-dir ./adclip_email_render
+```
+
+Build a complete synthetic performance/experiment bundle:
+
+```bash
+python examples/build_performance_demo.py
+```
+
+Then inspect the evidence:
+
+```bash
+adclip performance report ./adclip_performance_demo \
+  --since 2026-08-01 \
+  --until 2026-08-07 \
+  --action-report-time conversion
+```
+
+The builder prints an experiment ID that can be passed to
+`experiment-evaluate` and `next-test`. None of the commands above need a paid
+model API or live ad account.
+
+## Current capability map
+
+| Area | Current capability |
+| --- | --- |
+| Campaign briefs | Structured `AdBrief`, formats, policy constraints, cost estimation |
+| Copy | Provider-neutral generation, filtering, scoring, healing/judge compatibility |
+| Images | Task routes over fal/direct OpenAI/fake adapters with model-family schemas |
+| Video | Routed fal/fake generation for short-form formats |
+| Model selection | Explicit route/provider/model/options separation and bake-offs |
+| Email | Sequence generation, structured blocks, responsive HTML/text, headers, lint, patching |
+| Lineage | Stable campaign IDs and artifact-bound creative IDs |
+| Performance | Explicit deployment mappings and read-only Meta Insights sync |
+| Reporting | Attribution-safe exact windows and descriptive creative comparison |
+| Experiments | Control/treatment artifacts, changed factor, thresholds, rate confidence intervals |
+| Learning | Supported/contradicted/inconclusive evidence and deterministic next-test actions |
+| Interfaces | CLI + MCP over shared application services |
+| Safety | Runtime network modes, paid-generation gate, read-only Meta connector |
+
 ## Standalone CLI
+
+Useful discovery commands:
 
 ```bash
 adclip status
@@ -76,24 +139,23 @@ adclip formats
 adclip routes
 adclip routes --modality image
 adclip route-recommend image --text-heavy
-adclip estimate examples/taichi_brief.json
-adclip copy examples/taichi_brief.json
-adclip run examples/taichi_brief.json --image-provider fake
+adclip estimate examples/portable_power_brief.json
 adclip email --help
+adclip performance --help
 ```
 
-### Routed generation
+### Routed creative generation
 
 ```bash
-# General defaults: GPT Image 2 through fal + Kling O3 through fal
+# Route defaults
 adclip run brief.json
 
-# Task-specific routes
+# Task-specific selection
 adclip run brief.json \
   --image-route text-heavy \
   --video-route premium
 
-# Explicit provider/model values override route primaries
+# Explicit provider/model overrides remain authoritative
 adclip run brief.json \
   --image-route general \
   --image-provider openai \
@@ -112,68 +174,144 @@ Compatibility aliases remain:
 --video        -> --video-provider
 ```
 
+## Current media routes
+
+| Modality | Route | Primary | Purpose |
+| --- | --- | --- | --- |
+| Image | `general` | fal / `gpt-image-2` medium | General marketing creative |
+| Image | `text-heavy` | fal / `gpt-image-2` high | Readable text/layout work |
+| Image | `bulk` | fal / `flux-2-pro` | Cost-controlled batches |
+| Image | `draft` | fal / `nano-banana-2-lite` | Fast exploration |
+| Image | `brand-control` | fal / `flux-2-flex` | Palette/layout control |
+| Image | `premium` | direct OpenAI / `gpt-image-2` high | Premium general render |
+| Video | `general` | fal / `kling-o3-standard` | General social/performance video |
+| Video | `premium` | fal / `veo-3.1` | Cinematic/native-audio work |
+| Video | `multi-shot` | fal / `seedance-2-fast` | Directed multi-shot storytelling |
+| Video | `budget` | fal / `wan-2.7` | Lower-cost exploration |
+
+Reference-image, vector, multi-reference, image-animation, and footage-edit
+routes are cataloged but remain non-executable until their required input
+contracts/adapters exist. See [Model routing](docs/MODEL_ROUTING.md).
+
 ## Email campaigns and HTML editing
 
-Email is a native standalone capability, not a wrapper around one email service
-provider.
+Email is native campaign state rather than a wrapper around one ESP.
 
 ```bash
-# Generate a sequence and portable campaign bundle
-adclip email generate email-brief.json \
-  --provider openai-compatible \
-  --model qwen2.5:14b
+# Generate a sequence
+adclip email generate examples/email_campaign_brief.json --provider fake
 
-# Render one structured message
-adclip email render email-brief.json message.json \
+# Render structured message -> HTML + text + headers + lint
+adclip email render \
+  examples/email_campaign_brief.json \
+  examples/email_message.json \
   --output-dir ./rendered-email
 
-# Lint imported or generated HTML
-adclip email lint email.html \
-  --context lint-context.json \
-  --plain-text email.txt
+# Lint imported/generated HTML
+adclip email lint ./rendered-email/email.html \
+  --context examples/email_lint_context.json \
+  --plain-text ./rendered-email/email.txt
 
-# Patch rendered HTML by stable block ID
-adclip email patch-html email.html patches.json \
-  --context lint-context.json \
-  --output email-edited.html
-
-# Patch the source message document before rendering
-adclip email patch-message message.json patches.json \
-  --output message-edited.json
+# Apply stable block-level edits
+adclip email patch-message \
+  examples/email_message.json \
+  examples/email_patches.json \
+  --output ./message-edited.json
 ```
 
-A generated email campaign contains:
+Generated campaigns contain portable message JSON, responsive HTML, plain text,
+headers, lint reports, and a manifest. Sending, consent, suppression, and ESP
+account state remain connector responsibilities.
+
+See [Email campaigns](docs/EMAIL_CAMPAIGNS.md).
+
+## Performance and creative learning
+
+adclip can map an exact local creative to an existing Meta ad and read Insights
+back without adding Meta mutation methods.
+
+```bash
+adclip performance link-meta ./campaign \
+  --variant-id v01 \
+  --account-id act_123456 \
+  --ad-id 987654321
+
+export ADCLIP_META_ACCESS_TOKEN=...
+
+adclip performance sync-meta ./campaign \
+  --since 2026-08-01 \
+  --until 2026-08-07 \
+  --action-report-time conversion
+```
+
+Measurement windows are keyed by:
 
 ```text
-campaign.json
-manifest.json
-emails/
-  01-email-01/
-    message.json
-    email.html
-    email.txt
-    headers.json
-    lint.json
+(since, until, action_report_time)
 ```
 
-The renderer emits conservative table-based responsive HTML, hidden preheader
-text, a plain-text alternative, stable block-editing markers, and marketing
-footer/header metadata. The linter checks active content, unsafe URLs, missing
-alt text and links, fragile CSS, subject/preheader length, unsubscribe and postal
-address treatment, one-click unsubscribe headers, and unresolved template
-tokens.
+so conversion- and impression-attributed rows for the same dates are not
+silently combined.
 
-Sending remains a connector boundary. Future ESP adapters will consume the
-portable bundle rather than own the email document. See
-[`docs/EMAIL_CAMPAIGNS.md`](docs/EMAIL_CAMPAIGNS.md).
+Descriptive comparison:
 
-## Recurring model bake-off
+```bash
+adclip performance compare ./campaign \
+  --since 2026-08-01 \
+  --until 2026-08-07 \
+  --action-report-time conversion \
+  --metric ctr
+```
 
-Defaults should be promoted by evidence rather than reputation. adclip ships
-stable marketing fixtures covering typography, realism, brand color, package
-fidelity, product stability, audio/lip sync, and multi-shot continuity.
+See [Performance learning](docs/PERFORMANCE_LEARNING.md).
 
-A bake-off is a **dry run by default**:
+## Explicit creative experiments
+
+Declare the hypothesis before interpreting results:
+
+```bash
+adclip performance experiment-create ./campaign \
+  --name "Hook CTR test" \
+  --hypothesis "A contrarian hook increases CTR" \
+  --changed-factor hook \
+  --control-variant v01 \
+  --treatment-variant v02 \
+  --control-value "plain benefit" \
+  --treatment-value "contrarian challenge" \
+  --metric ctr
+```
+
+Then evaluate an exact stored window:
+
+```bash
+adclip performance experiment-evaluate ./campaign \
+  --experiment-id exp_... \
+  --since 2026-08-01 \
+  --until 2026-08-07
+```
+
+Current inferential verdicts are deliberately limited to rate metrics with
+explicit aggregate numerators/denominators: CTR, outbound CTR, and action rate.
+CPA and ROAS remain descriptive without variance/event-level evidence.
+Observational comparisons remain inconclusive by design, and experiment outputs
+currently keep `causal_claim: false`.
+
+Next-test guidance:
+
+```bash
+adclip performance next-test ./campaign \
+  --experiment-id exp_... \
+  --since 2026-08-01 \
+  --until 2026-08-07
+```
+
+See [Experiment contract](docs/EXPERIMENTS.md).
+
+## Recurring model bake-offs
+
+Defaults should be promoted by evidence rather than reputation.
+
+Dry-run plan only:
 
 ```bash
 adclip bakeoff \
@@ -182,8 +320,7 @@ adclip bakeoff \
   --output-dir ./image-bakeoff
 ```
 
-This writes `plan.json` without calling a paid provider. Execution requires an
-additional flag and still passes through the live-API authorization gate:
+Live execution requires both `--execute` and normal paid-provider authorization:
 
 ```bash
 ADCLIP_ALLOW_LIVE_APIS=1 adclip bakeoff \
@@ -195,19 +332,18 @@ ADCLIP_ALLOW_LIVE_APIS=1 adclip bakeoff \
 ```
 
 Results record route, provider, model, options, latency, estimated cost,
-artifact SHA-256, failure status, evaluation dimensions, and placeholders for
-human scoring.
+artifact SHA-256, failures, evaluation dimensions, and human-review fields.
 
 ## Text providers
 
 | Provider | Intended use |
 | --- | --- |
-| `claude-cli` | Existing subscription-authenticated compatibility default |
+| `claude-cli` | Subscription-authenticated compatibility default |
 | `openai-compatible` | Local or hosted `/v1/chat/completions` endpoint |
-| `command` | Any local executable reading stdin and writing stdout |
+| `command` | Local executable over stdin/stdout |
 | `sampling` | Sampling-capable MCP host |
 | `anthropic` | Direct opt-in Anthropic API |
-| `fake` | Deterministic testing |
+| `fake` | Deterministic tests/examples |
 
 Local HTTP inference:
 
@@ -216,52 +352,14 @@ export ADCLIP_TEXT_PROVIDER=openai-compatible
 export ADCLIP_TEXT_MODEL=qwen2.5:14b
 export ADCLIP_OPENAI_BASE_URL=http://127.0.0.1:11434/v1
 export ADCLIP_RUNTIME_MODE=offline
-adclip copy brief.json
+adclip copy examples/portable_power_brief.json
 ```
 
-Local command inference:
-
-```bash
-export ADCLIP_TEXT_PROVIDER=command
-export ADCLIP_COMMAND_TEXT_COMMAND='my-model-cli --model {model} --json'
-export ADCLIP_COMMAND_TEXT_MODEL=my-local-model
-export ADCLIP_RUNTIME_MODE=air_gapped
-adclip copy brief.json
-```
-
-The command provider sends the prompt through stdin, reads stdout, and never
-invokes a shell.
-
-## Media adapters
-
-Primary configuration:
-
-```text
-ADCLIP_IMAGE_ROUTE
-ADCLIP_IMAGE_PROVIDER
-ADCLIP_IMAGE_MODEL
-ADCLIP_VIDEO_ROUTE
-ADCLIP_VIDEO_PROVIDER
-ADCLIP_VIDEO_MODEL
-```
-
-Image providers:
-
-- `fal`: GPT Image 2, Nano Banana, FLUX.2, legacy aliases, raw fal endpoints
-- `openai`: first-party GPT Image API
-- `fake`: deterministic test image
-
-Video providers:
-
-- `fal`: Kling O3/3, Veo 3.1, Seedance 2, Wan 2.7, Wan 2.6 legacy, raw endpoints
-- `fake`: deterministic test video
-
-Each model family has its own request builder. adclip does not assume GPT Image,
-Nano Banana, FLUX, Kling, Veo, Seedance, and Wan accept one universal schema.
+See [Model providers](docs/MODEL_PROVIDERS.md).
 
 ## MCP
 
-Add to `.mcp.json` or `~/.claude.json`:
+Example local registration:
 
 ```json
 {
@@ -273,23 +371,31 @@ Add to `.mcp.json` or `~/.claude.json`:
 }
 ```
 
-The MCP surface includes campaign generation and iteration plus:
+The MCP surface exposes the same campaign, routing, email, performance, and
+experiment application services used by the CLI. Important newer tools include:
 
-- `adclip_list_media_routes`
-- `adclip_recommend_media_route`
-- routed cost estimation
-- routed full generation
-- routed visual-only generation
-- routed regeneration
-- `adclip_email_generate_campaign`
-- `adclip_email_render`
-- `adclip_email_lint`
-- `adclip_email_patch_html`
-- `adclip_email_patch_message`
+```text
+adclip_list_media_routes
+adclip_recommend_media_route
+adclip_email_generate_campaign
+adclip_email_render
+adclip_email_lint
+adclip_email_patch_html
+adclip_email_patch_message
+adclip_performance_link_meta
+adclip_performance_deployments
+adclip_performance_sync_meta
+adclip_performance_report
+adclip_performance_compare
+adclip_experiment_create
+adclip_experiments
+adclip_experiment_evaluate
+adclip_experiment_next_test
+```
 
 ## Runtime and billing safety
 
-Supported modes:
+Supported runtime modes:
 
 ```text
 online
@@ -298,29 +404,41 @@ offline
 air_gapped
 ```
 
-Loopback inference is allowed offline. External providers are refused in
-offline and air-gapped modes. Potentially paid providers require:
+External generation providers are refused offline/air-gapped. Loopback text
+inference remains available. Potentially paid generation requires:
 
 ```bash
 ADCLIP_ALLOW_LIVE_APIS=1
 ```
 
-Email rendering, linting, and patching are local deterministic operations.
-Email generation uses the normal text-provider policy. No sending provider is
-invoked by the initial email slice.
+The Meta performance connector is a separate read-only network adapter and does
+not use the generation-spend authorization flag.
 
 ## Tests
 
+The project test suite is designed to run without paid APIs or live marketing
+accounts:
+
 ```bash
-.venv/bin/python -m pytest
+python -m pytest
+python -m compileall src/adclip
 ```
 
-## Status
+## Current status and next milestones
 
-The current foundation includes a transport-neutral application layer,
-model-agnostic text providers, task-oriented image/video routes, direct OpenAI
-image access, schema-aware fal adapters, run-level model provenance, a
-repeatable bake-off harness, responsive email campaign generation and editing,
-and CLI/MCP access. SQLite, durable jobs, BrandKit/SourceLibrary, send-platform
-connectors, performance feedback, and the local browser workbench remain the
-next major milestones.
+The current core includes generation, email authoring, exact creative lineage,
+read-only Meta performance ingestion, attribution-safe reporting, explicit
+experiments, and next-test recommendations.
+
+The largest remaining product gaps are:
+
+1. SQLite/migrations as authoritative state, content-addressed artifacts, and
+   durable resumable jobs;
+2. BrandKit and SourceLibrary;
+3. bundled local browser workbench;
+4. creative-attribute extraction and experiment-aware controlled generation;
+5. Google Ads, TikTok, and ESP performance adapters;
+6. fatigue/change-point analysis and richer CPA/ROAS evidence;
+7. separately authorized draft/paused deployment workflows.
+
+See [Standalone architecture](docs/STANDALONE_ARCHITECTURE.md) for the roadmap.
