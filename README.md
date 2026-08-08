@@ -47,12 +47,10 @@ Core principles:
 
 ## Start here
 
-For the current repository feature set, see:
-
-- **[Quickstart](docs/QUICKSTART.md)** — zero-cost creative, email, and learning
-  workflows.
-- **[Examples](examples/README.md)** — runnable fixtures and commands.
+- **[Quickstart](docs/QUICKSTART.md)** — zero-cost DTC creative, email, and learning walkthrough.
+- **[Examples](examples/README.md)** — marketer-facing campaign portfolio.
 - **[Documentation index](docs/README.md)** — architecture and capability docs.
+- **[LLM guidance](LLM.md)** — model-neutral contributor/agent contract.
 
 Install from PyPI:
 
@@ -74,34 +72,34 @@ Python 3.11+ is required.
 
 ## Five-minute zero-cost demo
 
-Generate a cross-channel campaign using only fake providers:
+Generate a fictional DTC skincare launch across Meta, Reels/TikTok, and Google
+using only fake providers:
 
 ```bash
-adclip run examples/portable_power_brief.json \
+adclip run examples/01-dtc-skincare/brief.json \
   --text-provider fake \
   --image-provider fake \
   --video-provider fake
 ```
 
-Render a structured email locally:
+Generate the matching launch email sequence:
 
 ```bash
-adclip email render \
-  examples/email_campaign_brief.json \
-  examples/email_message.json \
-  --output-dir ./adclip_email_render
+adclip email generate \
+  examples/01-dtc-skincare/email_brief.json \
+  --provider fake
 ```
 
-Build a complete synthetic performance/experiment bundle:
+Build a complete synthetic creative-test bundle:
 
 ```bash
-python examples/build_performance_demo.py
+python examples/06-creative-experiment/build_demo.py
 ```
 
 Then inspect the evidence:
 
 ```bash
-adclip performance report ./adclip_performance_demo \
+adclip performance report ./adclip_creative_test_demo \
   --since 2026-08-01 \
   --until 2026-08-07 \
   --action-report-time conversion
@@ -110,6 +108,23 @@ adclip performance report ./adclip_performance_demo \
 The builder prints an experiment ID that can be passed to
 `experiment-evaluate` and `next-test`. None of the commands above need a paid
 model API or live ad account.
+
+## Example portfolio
+
+The repository examples are organized around marketing problems rather than
+internal subsystems:
+
+| Example | Marketing workload | Main surfaces |
+| --- | --- | --- |
+| `01-dtc-skincare` | Product launch / first purchase | Meta, Reels, TikTok, Google, email |
+| `02-b2b-saas-lead-gen` | Qualified demo generation | LinkedIn, Google Search |
+| `03-local-service-lead-gen` | Local direct-response leads | Meta, Google Search |
+| `04-subscription-winback` | Lifecycle retention | Email |
+| `05-mobile-app-acquisition` | Free-trial acquisition | TikTok, Reels, Shorts, Meta |
+| `06-creative-experiment` | Controlled hook learning | Synthetic Meta observations |
+
+See [examples/README.md](examples/README.md) for the business goal, audience,
+hypothesis, and commands behind each case.
 
 ## Current capability map
 
@@ -139,7 +154,7 @@ adclip formats
 adclip routes
 adclip routes --modality image
 adclip route-recommend image --text-heavy
-adclip estimate examples/portable_power_brief.json
+adclip estimate examples/01-dtc-skincare/brief.json
 adclip email --help
 adclip performance --help
 ```
@@ -198,19 +213,14 @@ contracts/adapters exist. See [Model routing](docs/MODEL_ROUTING.md).
 Email is native campaign state rather than a wrapper around one ESP.
 
 ```bash
-# Generate a sequence
-adclip email generate examples/email_campaign_brief.json --provider fake
+# Generate the canonical launch sequence
+adclip email generate examples/01-dtc-skincare/email_brief.json --provider fake
 
-# Render structured message -> HTML + text + headers + lint
+# Render a checked-in structured message -> HTML + text + headers + lint
 adclip email render \
   examples/email_campaign_brief.json \
   examples/email_message.json \
   --output-dir ./rendered-email
-
-# Lint imported/generated HTML
-adclip email lint ./rendered-email/email.html \
-  --context examples/email_lint_context.json \
-  --plain-text ./rendered-email/email.txt
 
 # Apply stable block-level edits
 adclip email patch-message \
@@ -244,14 +254,9 @@ adclip performance sync-meta ./campaign \
   --action-report-time conversion
 ```
 
-Measurement windows are keyed by:
-
-```text
-(since, until, action_report_time)
-```
-
-so conversion- and impression-attributed rows for the same dates are not
-silently combined.
+Measurement windows are keyed by `(since, until, action_report_time)`, so
+conversion- and impression-attributed rows for the same dates are not silently
+combined.
 
 Descriptive comparison:
 
@@ -267,27 +272,25 @@ See [Performance learning](docs/PERFORMANCE_LEARNING.md).
 
 ## Explicit creative experiments
 
-Declare the hypothesis before interpreting results:
+The checked-in demo uses a familiar paid-social question: does vivid problem
+framing beat a plain product-benefit hook?
+
+```bash
+python examples/06-creative-experiment/build_demo.py
+```
+
+Or declare your own experiment before interpreting results:
 
 ```bash
 adclip performance experiment-create ./campaign \
   --name "Hook CTR test" \
-  --hypothesis "A contrarian hook increases CTR" \
+  --hypothesis "Problem framing increases CTR" \
   --changed-factor hook \
   --control-variant v01 \
   --treatment-variant v02 \
   --control-value "plain benefit" \
-  --treatment-value "contrarian challenge" \
+  --treatment-value "problem framing" \
   --metric ctr
-```
-
-Then evaluate an exact stored window:
-
-```bash
-adclip performance experiment-evaluate ./campaign \
-  --experiment-id exp_... \
-  --since 2026-08-01 \
-  --until 2026-08-07
 ```
 
 Current inferential verdicts are deliberately limited to rate metrics with
@@ -296,41 +299,21 @@ CPA and ROAS remain descriptive without variance/event-level evidence.
 Observational comparisons remain inconclusive by design, and experiment outputs
 currently keep `causal_claim: false`.
 
-Next-test guidance:
-
-```bash
-adclip performance next-test ./campaign \
-  --experiment-id exp_... \
-  --since 2026-08-01 \
-  --until 2026-08-07
-```
-
 See [Experiment contract](docs/EXPERIMENTS.md).
 
 ## Recurring model bake-offs
 
 Defaults should be promoted by evidence rather than reputation.
 
-Dry-run plan only:
-
 ```bash
+# Dry-run plan only
 adclip bakeoff \
   --modality image \
   --routes general,text-heavy,bulk,draft \
   --output-dir ./image-bakeoff
 ```
 
-Live execution requires both `--execute` and normal paid-provider authorization:
-
-```bash
-ADCLIP_ALLOW_LIVE_APIS=1 adclip bakeoff \
-  --modality image \
-  --routes general,text-heavy,bulk \
-  --repetitions 3 \
-  --execute \
-  --output-dir ./image-bakeoff
-```
-
+Live execution requires both `--execute` and normal paid-provider authorization.
 Results record route, provider, model, options, latency, estimated cost,
 artifact SHA-256, failures, evaluation dimensions, and human-review fields.
 
@@ -352,7 +335,7 @@ export ADCLIP_TEXT_PROVIDER=openai-compatible
 export ADCLIP_TEXT_MODEL=qwen2.5:14b
 export ADCLIP_OPENAI_BASE_URL=http://127.0.0.1:11434/v1
 export ADCLIP_RUNTIME_MODE=offline
-adclip copy examples/portable_power_brief.json
+adclip copy examples/01-dtc-skincare/brief.json
 ```
 
 See [Model providers](docs/MODEL_PROVIDERS.md).
