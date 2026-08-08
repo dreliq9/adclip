@@ -1,6 +1,6 @@
 {
   "product": "Morrow Daily Barrier Moisturizer",
-  "value_prop": "A lightweight, fragrance-free daily moisturizer with ceramides and squalane for dry or sensitive skin.",
+  "value_prop": "A lightweight, fragrance-free daily moisturizer with ceramides and squalane for dry or sensitive skin, with 20% off the first order.",
   "audience": "Adults 25-40 who want a simple daily moisturizer for dry or sensitive skin.",
   "angles": [
     "ingredient-led simplicity",
@@ -20,9 +20,7 @@
   "pool_size": 8,
   "variant_strategy": "angles",
   "policy_profile": "default",
-  "must_include": [
-    "20% off first order"
-  ],
+  "must_include": [],
   "must_avoid": [
     "cures eczema",
     "clinically proven",
