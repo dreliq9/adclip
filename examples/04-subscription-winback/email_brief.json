@@ -1,0 +1,30 @@
+{
+  "name": "Morning Harbor subscriber win-back",
+  "product": "Morning Harbor Coffee subscription",
+  "value_prop": "Fresh-roasted coffee delivered on a flexible schedule with easy skip and frequency controls.",
+  "audience": "Subscribers with no shipment in 45 or more days.",
+  "objective": "Reactivate lapsed subscribers without manufactured urgency.",
+  "tone": "warm, concise, useful, low-pressure",
+  "offer": "Free shipping on the next subscription box",
+  "cta": "Restart your subscription",
+  "landing_page_url": "https://example.com/restart",
+  "sender_name": "Morning Harbor Coffee",
+  "sender_email": "hello@example.com",
+  "reply_to": "support@example.com",
+  "campaign_type": "marketing",
+  "sequence_length": 3,
+  "cadence_days": [0, 4, 9],
+  "brand_colors": ["#F6F0E6", "#5A3D2E", "#C47A44"],
+  "unsubscribe_url": "{{unsubscribe_url}}",
+  "physical_address": "{{physical_address}}",
+  "must_include": [
+    "Free shipping on the next subscription box"
+  ],
+  "must_avoid": [
+    "last chance",
+    "act now",
+    "your subscription is expiring",
+    "limited supply"
+  ],
+  "output_dir": "adclip_subscription_winback"
+}
