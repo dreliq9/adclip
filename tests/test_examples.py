@@ -6,6 +6,7 @@ from pathlib import Path
 
 from adclip.application.experiment_services import ExperimentApplication
 from adclip.application.performance_services import PerformanceApplication
+from adclip.email.schema import EmailCampaignBrief, EmailMessage
 from adclip.schema import AdBrief
 
 
@@ -35,6 +36,30 @@ def test_marketing_brief_examples_validate():
         assert brief.product
         assert brief.audience
         assert brief.formats
+
+
+def test_marketer_facing_email_examples_validate():
+    brief_paths = [
+        ROOT / "examples" / "01-dtc-skincare" / "email_brief.json",
+        ROOT / "examples" / "04-subscription-winback" / "email_brief.json",
+    ]
+    for path in brief_paths:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        brief = EmailCampaignBrief.model_validate(payload)
+        assert brief.product
+        assert brief.objective
+
+    message_paths = [
+        ROOT / "examples" / "01-dtc-skincare" / "email_message.json",
+        ROOT / "examples" / "04-subscription-winback" / "email_01_reminder.json",
+        ROOT / "examples" / "04-subscription-winback" / "email_02_value.json",
+        ROOT / "examples" / "04-subscription-winback" / "email_03_offer.json",
+    ]
+    for path in message_paths:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        message = EmailMessage.model_validate(payload)
+        assert message.subject
+        assert message.blocks
 
 
 def test_performance_demo_builds_and_evaluates_offline(tmp_path):
