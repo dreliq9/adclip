@@ -38,6 +38,11 @@ Brand and source material
   -> next experiment
 ```
 
+When campaigns are produced **inside Grok Build** with Imagine scene plates
+and code typography (rather than only `adclip run` media providers), use the
+operator loop in [`GROK_BUILD_CREATIVE_WORKFLOW.md`](GROK_BUILD_CREATIVE_WORKFLOW.md)
+for inventory, scorecard review, and targeted plate/type regeneration.
+
 The open local core should remain useful on its own. Hosted services may later
 add collaboration, managed inference, OAuth account connections, scheduled
 performance synchronization, and remote access.

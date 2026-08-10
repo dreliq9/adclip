@@ -26,6 +26,8 @@ Architecture references:
 - [`docs/MODEL_PROVIDERS.md`](docs/MODEL_PROVIDERS.md)
 - [`docs/MODEL_ROUTING.md`](docs/MODEL_ROUTING.md)
 - [`docs/EMAIL_CAMPAIGNS.md`](docs/EMAIL_CAMPAIGNS.md)
+- [`docs/GROK_BUILD_CREATIVE_WORKFLOW.md`](docs/GROK_BUILD_CREATIVE_WORKFLOW.md) — Grok Build Imagine + review–regen loop
+- [`docs/CREATIVE_AUDIT_TEMPLATE.md`](docs/CREATIVE_AUDIT_TEMPLATE.md) — performance creative audit template
 
 ## Current routes
 
