@@ -59,6 +59,14 @@ def test_brand_product_source_claim_round_trip(tmp_path):
     assert snapshot["claims"][0]["evidence_source_ids"] == [source_id]
 
 
+def test_duplicate_brand_slug_returns_application_error(tmp_path):
+    app = BrandApplication(database=Database(tmp_path / "adclip.db"))
+    assert app.create(slug="morrow", name="Morrow")["ok"] is True
+    duplicate = app.create(slug="morrow", name="Other Morrow")
+    assert duplicate["ok"] is False
+    assert "already exists" in duplicate["error"]
+
+
 def test_claim_rejects_foreign_evidence_source(tmp_path):
     app = BrandApplication(database=Database(tmp_path / "adclip.db"))
     app.create(slug="one", name="One")
