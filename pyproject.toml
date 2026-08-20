@@ -4,15 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adclip"
-version = "0.1.1"
-description = "MCP server for ad creative generation — copy and static images from a single JSON brief"
+version = "0.2.0"
+description = "Local-first, model-neutral marketing creative and learning engine"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
     { name = "Adam Steen", email = "dreliq9@gmail.com" },
 ]
-keywords = ["mcp", "ads", "advertising", "claude", "llm", "creative", "meta-dco"]
+keywords = [
+    "advertising",
+    "marketing",
+    "creative",
+    "experiments",
+    "performance-marketing",
+    "mcp",
+    "llm",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -29,7 +37,7 @@ dependencies = [
     "click>=8.1",
     "pydantic>=2.0",
     "Pillow>=10.0",
-    "mcp>=1.2.0",
+    "mcp>=1.2.0,<2",
     "av>=12.0",
     "fal-client>=0.13",
 ]
@@ -40,7 +48,7 @@ Repository = "https://github.com/dreliq9/adclip"
 Issues = "https://github.com/dreliq9/adclip/issues"
 
 [project.scripts]
-adclip = "adclip.cli:main"
+adclip = "adclip.entry:main"
 adclip-mcp = "adclip.mcp.server:main"
 
 [project.optional-dependencies]
