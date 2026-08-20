@@ -2,8 +2,8 @@
 
 adclip is a standalone, model-routed marketing creative and learning engine. The
 repository now spans creative generation, responsive email authoring,
-performance ingestion, explicit experiments, and evidence-aware next-test
-recommendations. This page is the map for that surface.
+performance ingestion, explicit experiments, evidence-aware next-test
+recommendations, and the first persistent BrandKit/SourceLibrary foundation.
 
 ## Start here
 
@@ -14,10 +14,12 @@ recommendations. This page is the map for that surface.
 - [`../LLM.md`](../LLM.md) — model-neutral implementation guidance for AI agents
   and contributors working on the repository.
 
-## Product and architecture
+## Product, architecture, and roadmap
 
 - [`STANDALONE_ARCHITECTURE.md`](STANDALONE_ARCHITECTURE.md) — product contract,
-  layering rules, runtime boundaries, persistence direction, and roadmap.
+  layering rules, runtime boundaries, and durable architectural direction.
+- [`ROADMAP.md`](ROADMAP.md) — current execution order, with S1 authoritative
+  persistence and S2 BrandKit/SourceLibrary ahead of UI and broader connectors.
 - [`MODEL_PROVIDERS.md`](MODEL_PROVIDERS.md) — text-provider abstraction and
   local/hosted provider configuration.
 - [`MODEL_ROUTING.md`](MODEL_ROUTING.md) — task routes for image/video models,
@@ -36,27 +38,31 @@ recommendations. This page is the map for that surface.
 ## Current lifecycle
 
 ```text
-campaign brief
+persistent BrandKit / SourceLibrary
     |
-    +--> copy / image / video routes
-    |        |
-    |        +--> portable creative artifacts + provenance
-    |
-    +--> email sequence
-    |        |
-    |        +--> message JSON + HTML + text + headers + lint
-    |
-    +--> deployment mapping
+    +--> product / claim / source context
              |
-             +--> read-only performance observations
-                       |
-                       +--> descriptive comparison
-                       |
-                       +--> explicit experiment
-                                  |
-                                  +--> supported / contradicted / inconclusive
-                                  |
-                                  +--> next-test recommendation
+             +--> campaign brief
+                    |
+                    +--> copy / image / video routes
+                    |        |
+                    |        +--> portable creative artifacts + provenance
+                    |
+                    +--> email sequence
+                    |        |
+                    |        +--> message JSON + HTML + text + headers + lint
+                    |
+                    +--> deployment mapping
+                             |
+                             +--> read-only performance observations
+                                       |
+                                       +--> descriptive comparison
+                                       |
+                                       +--> explicit experiment
+                                                  |
+                                                  +--> supported / contradicted / inconclusive
+                                                  |
+                                                  +--> next-test recommendation
 ```
 
 MCP, CLI, and future HTTP/web interfaces are adapters over application services;
@@ -76,16 +82,22 @@ none of them owns the campaign model.
 - read-only Meta performance synchronization;
 - attribution-safe reporting by `(since, until, action_report_time)`;
 - explicit creative experiments with conservative rate inference;
-- deterministic evidence-aware next-test recommendations.
+- deterministic evidence-aware next-test recommendations;
+- SQLite migration/bootstrap substrate;
+- global SHA-256 content-addressed artifact storage;
+- persistent BrandKit, products, SourceLibrary records, and claims/evidence links;
+- storage and brand CLI diagnostics/workflows.
 
 ### Still planned
 
-- SQLite as authoritative state plus migrations;
-- content-addressed global artifact storage and durable jobs;
-- BrandKit and SourceLibrary;
+- migration of existing campaign/email/performance/experiment state into SQLite as
+  authoritative state while keeping portable JSON exports;
+- website/file ingestion and editable brand/source extraction;
+- CampaignBriefV2 grounded in persistent brand/product/source/claim IDs;
+- creative-attribute extraction and experiment-aware controlled generation;
+- durable jobs and resumability;
 - bundled local browser workbench;
 - Google Ads, TikTok, and ESP performance connectors;
-- creative-attribute extraction and experiment-aware controlled generation;
 - fatigue/change-point analysis;
 - variance-aware CPA/ROAS inference;
 - separately authorized draft/paused activation.
@@ -100,3 +112,6 @@ none of them owns the campaign model.
   permits an inferential rate verdict.
 - Experiment evaluations currently retain `causal_claim: false` even when the
   statistical evidence supports the declared treatment direction.
+- Imported local source files are stored by content hash; portable source
+  provenance does not include the user's absolute local filesystem path by
+  default.
