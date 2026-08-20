@@ -20,6 +20,8 @@ recommendations, and the first persistent BrandKit/SourceLibrary foundation.
   layering rules, runtime boundaries, and durable architectural direction.
 - [`ROADMAP.md`](ROADMAP.md) — current execution order, with S1 authoritative
   persistence and S2 BrandKit/SourceLibrary ahead of UI and broader connectors.
+- [`BRANDKIT_SOURCES.md`](BRANDKIT_SOURCES.md) — persistent brand, product,
+  source, rights/provenance, claim, and evidence contracts plus current CLI.
 - [`MODEL_PROVIDERS.md`](MODEL_PROVIDERS.md) — text-provider abstraction and
   local/hosted provider configuration.
 - [`MODEL_ROUTING.md`](MODEL_ROUTING.md) — task routes for image/video models,
