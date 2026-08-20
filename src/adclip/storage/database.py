@@ -64,13 +64,19 @@ MIGRATIONS: tuple[tuple[int, str], ...] = (
             product_id TEXT REFERENCES products(id) ON DELETE SET NULL,
             text TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'unreviewed',
-            evidence_source_ids_json TEXT NOT NULL DEFAULT '[]',
             metadata_json TEXT NOT NULL DEFAULT '{}',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_claims_brand_id ON claims(brand_id);
         CREATE INDEX IF NOT EXISTS idx_claims_product_id ON claims(product_id);
+
+        CREATE TABLE IF NOT EXISTS claim_evidence (
+            claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+            source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE RESTRICT,
+            PRIMARY KEY (claim_id, source_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_claim_evidence_source_id ON claim_evidence(source_id);
 
         CREATE TABLE IF NOT EXISTS artifacts (
             sha256 TEXT PRIMARY KEY,
