@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +44,8 @@ class BrandApplication:
                 visual=BrandVisual(colors=colors or []),
             )
             self.repository.save_brand(brand)
+        except sqlite3.IntegrityError as exc:
+            return {"ok": False, "error": f"Brand slug or ID already exists: {exc}"}
         except (ValueError, OSError) as exc:
             return {"ok": False, "error": str(exc)}
         return {"ok": True, "brand": brand.model_dump(mode="json")}
@@ -50,7 +53,7 @@ class BrandApplication:
     def list(self) -> dict[str, object]:
         try:
             brands = self.repository.list_brands()
-        except (ValueError, OSError) as exc:
+        except (ValueError, OSError, sqlite3.DatabaseError) as exc:
             return {"ok": False, "error": str(exc)}
         return {
             "ok": True,
@@ -60,7 +63,7 @@ class BrandApplication:
     def show(self, slug_or_id: str) -> dict[str, object]:
         try:
             snapshot = self.repository.snapshot(slug_or_id)
-        except (ValueError, OSError) as exc:
+        except (ValueError, OSError, sqlite3.DatabaseError) as exc:
             return {"ok": False, "error": str(exc)}
         return {"ok": True, **snapshot}
 
@@ -87,7 +90,7 @@ class BrandApplication:
                 metadata=metadata or {},
             )
             self.repository.save_product(product)
-        except (ValueError, OSError) as exc:
+        except (ValueError, OSError, sqlite3.DatabaseError) as exc:
             return {"ok": False, "error": str(exc)}
         return {"ok": True, "product": product.model_dump(mode="json")}
 
@@ -137,7 +140,7 @@ class BrandApplication:
                 metadata=source_metadata,
             )
             self.repository.save_source(source)
-        except (FileNotFoundError, ValueError, OSError) as exc:
+        except (FileNotFoundError, ValueError, OSError, sqlite3.DatabaseError) as exc:
             return {"ok": False, "error": str(exc)}
         return {"ok": True, "source": source.model_dump(mode="json")}
 
@@ -170,6 +173,6 @@ class BrandApplication:
                 metadata=metadata or {},
             )
             self.repository.save_claim(claim)
-        except (ValueError, OSError) as exc:
+        except (ValueError, OSError, sqlite3.DatabaseError) as exc:
             return {"ok": False, "error": str(exc)}
         return {"ok": True, "claim": claim.model_dump(mode="json")}
