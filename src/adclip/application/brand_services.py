@@ -125,7 +125,7 @@ class BrandApplication:
                 resolved_uri = artifact.uri
                 sha256 = artifact.sha256
                 source_kind = "file" if kind == "other" else kind
-                source_provenance.setdefault("original_path", str(Path(file_path).resolve()))
+                source_provenance.setdefault("ingested_from", "local_file")
                 source_metadata.setdefault("original_name", artifact.original_name)
                 source_metadata.setdefault("media_type", artifact.media_type)
             source = SourceRecord(
