@@ -18,8 +18,36 @@ def _load(value: str) -> object:
     return json.loads(value)
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+def _assert_immutable_brand(connection, table: str, record_id: str, brand_id: str) -> None:
+    row = connection.execute(
+        f"SELECT brand_id FROM {table} WHERE id = ?", (record_id,)
+    ).fetchone()
+    if row is not None and str(row["brand_id"]) != brand_id:
+        raise ValueError(
+            f"{table[:-1].capitalize()} {record_id} already belongs to another brand"
+        )
+
+
+def _assert_product_brand(connection, product_id: str | None, brand_id: str) -> None:
+    if product_id is None:
+        return
+    row = connection.execute(
+        "SELECT brand_id FROM products WHERE id = ?", (product_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"Product not found: {product_id}")
+    if str(row["brand_id"]) != brand_id:
+        raise ValueError(f"Product {product_id} belongs to another brand")
+
+
+def _assert_source_brand(connection, source_id: str, brand_id: str) -> None:
+    row = connection.execute(
+        "SELECT brand_id FROM sources WHERE id = ?", (source_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"Source not found: {source_id}")
+    if str(row["brand_id"]) != brand_id:
+        raise ValueError(f"Source {source_id} belongs to another brand")
 
 
 class BrandRepository:
@@ -42,9 +70,15 @@ class BrandRepository:
                     visual_json=excluded.visual_json, updated_at=excluded.updated_at
                 """,
                 (
-                    brand.id, brand.slug, brand.name, brand.description, brand.website_url,
-                    brand.voice.model_dump_json(), brand.visual.model_dump_json(),
-                    brand.created_at.isoformat(), brand.updated_at.isoformat(),
+                    brand.id,
+                    brand.slug,
+                    brand.name,
+                    brand.description,
+                    brand.website_url,
+                    brand.voice.model_dump_json(),
+                    brand.visual.model_dump_json(),
+                    brand.created_at.isoformat(),
+                    brand.updated_at.isoformat(),
                 ),
             )
             connection.commit()
@@ -57,12 +91,19 @@ class BrandRepository:
             ).fetchone()
         if row is None:
             raise ValueError(f"Brand not found: {slug_or_id}")
-        return BrandKit.model_validate({
-            "id": row["id"], "slug": row["slug"], "name": row["name"],
-            "description": row["description"], "website_url": row["website_url"],
-            "voice": _load(row["voice_json"]), "visual": _load(row["visual_json"]),
-            "created_at": row["created_at"], "updated_at": row["updated_at"],
-        })
+        return BrandKit.model_validate(
+            {
+                "id": row["id"],
+                "slug": row["slug"],
+                "name": row["name"],
+                "description": row["description"],
+                "website_url": row["website_url"],
+                "voice": _load(row["voice_json"]),
+                "visual": _load(row["visual_json"]),
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+            }
+        )
 
     def list_brands(self) -> list[BrandKit]:
         with self.database.connect() as connection:
@@ -72,6 +113,7 @@ class BrandRepository:
     def save_product(self, product: ProductProfile) -> ProductProfile:
         product.updated_at = datetime.now(timezone.utc)
         with self.database.connect() as connection:
+            _assert_immutable_brand(connection, "products", product.id, product.brand_id)
             connection.execute(
                 """
                 INSERT INTO products(id, brand_id, name, description, value_prop, audience_json, offers_json, metadata_json, created_at, updated_at)
@@ -82,9 +124,16 @@ class BrandRepository:
                     metadata_json=excluded.metadata_json, updated_at=excluded.updated_at
                 """,
                 (
-                    product.id, product.brand_id, product.name, product.description,
-                    product.value_prop, _dump(product.audiences), _dump(product.offers),
-                    _dump(product.metadata), product.created_at.isoformat(), product.updated_at.isoformat(),
+                    product.id,
+                    product.brand_id,
+                    product.name,
+                    product.description,
+                    product.value_prop,
+                    _dump(product.audiences),
+                    _dump(product.offers),
+                    _dump(product.metadata),
+                    product.created_at.isoformat(),
+                    product.updated_at.isoformat(),
                 ),
             )
             connection.commit()
@@ -95,17 +144,29 @@ class BrandRepository:
             rows = connection.execute(
                 "SELECT * FROM products WHERE brand_id = ? ORDER BY name, id", (brand_id,)
             ).fetchall()
-        return [ProductProfile.model_validate({
-            "id": row["id"], "brand_id": row["brand_id"], "name": row["name"],
-            "description": row["description"], "value_prop": row["value_prop"],
-            "audiences": _load(row["audience_json"]), "offers": _load(row["offers_json"]),
-            "metadata": _load(row["metadata_json"]), "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-        }) for row in rows]
+        return [
+            ProductProfile.model_validate(
+                {
+                    "id": row["id"],
+                    "brand_id": row["brand_id"],
+                    "name": row["name"],
+                    "description": row["description"],
+                    "value_prop": row["value_prop"],
+                    "audiences": _load(row["audience_json"]),
+                    "offers": _load(row["offers_json"]),
+                    "metadata": _load(row["metadata_json"]),
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                }
+            )
+            for row in rows
+        ]
 
     def save_source(self, source: SourceRecord) -> SourceRecord:
         source.updated_at = datetime.now(timezone.utc)
         with self.database.connect() as connection:
+            _assert_immutable_brand(connection, "sources", source.id, source.brand_id)
+            _assert_product_brand(connection, source.product_id, source.brand_id)
             connection.execute(
                 """
                 INSERT INTO sources(id, brand_id, product_id, kind, title, uri, rights, sha256, provenance_json, metadata_json, created_at, updated_at)
@@ -117,9 +178,18 @@ class BrandRepository:
                     updated_at=excluded.updated_at
                 """,
                 (
-                    source.id, source.brand_id, source.product_id, source.kind, source.title,
-                    source.uri, source.rights, source.sha256, _dump(source.provenance),
-                    _dump(source.metadata), source.created_at.isoformat(), source.updated_at.isoformat(),
+                    source.id,
+                    source.brand_id,
+                    source.product_id,
+                    source.kind,
+                    source.title,
+                    source.uri,
+                    source.rights,
+                    source.sha256,
+                    _dump(source.provenance),
+                    _dump(source.metadata),
+                    source.created_at.isoformat(),
+                    source.updated_at.isoformat(),
                 ),
             )
             connection.commit()
@@ -130,31 +200,56 @@ class BrandRepository:
             rows = connection.execute(
                 "SELECT * FROM sources WHERE brand_id = ? ORDER BY created_at, id", (brand_id,)
             ).fetchall()
-        return [SourceRecord.model_validate({
-            "id": row["id"], "brand_id": row["brand_id"], "product_id": row["product_id"],
-            "kind": row["kind"], "title": row["title"], "uri": row["uri"],
-            "rights": row["rights"], "sha256": row["sha256"],
-            "provenance": _load(row["provenance_json"]), "metadata": _load(row["metadata_json"]),
-            "created_at": row["created_at"], "updated_at": row["updated_at"],
-        }) for row in rows]
+        return [
+            SourceRecord.model_validate(
+                {
+                    "id": row["id"],
+                    "brand_id": row["brand_id"],
+                    "product_id": row["product_id"],
+                    "kind": row["kind"],
+                    "title": row["title"],
+                    "uri": row["uri"],
+                    "rights": row["rights"],
+                    "sha256": row["sha256"],
+                    "provenance": _load(row["provenance_json"]),
+                    "metadata": _load(row["metadata_json"]),
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                }
+            )
+            for row in rows
+        ]
 
     def save_claim(self, claim: ClaimRecord) -> ClaimRecord:
         claim.updated_at = datetime.now(timezone.utc)
         with self.database.connect() as connection:
+            _assert_immutable_brand(connection, "claims", claim.id, claim.brand_id)
+            _assert_product_brand(connection, claim.product_id, claim.brand_id)
+            for source_id in claim.evidence_source_ids:
+                _assert_source_brand(connection, source_id, claim.brand_id)
             connection.execute(
                 """
-                INSERT INTO claims(id, brand_id, product_id, text, status, evidence_source_ids_json, metadata_json, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO claims(id, brand_id, product_id, text, status, metadata_json, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     product_id=excluded.product_id, text=excluded.text, status=excluded.status,
-                    evidence_source_ids_json=excluded.evidence_source_ids_json,
                     metadata_json=excluded.metadata_json, updated_at=excluded.updated_at
                 """,
                 (
-                    claim.id, claim.brand_id, claim.product_id, claim.text, claim.status,
-                    _dump(claim.evidence_source_ids), _dump(claim.metadata),
-                    claim.created_at.isoformat(), claim.updated_at.isoformat(),
+                    claim.id,
+                    claim.brand_id,
+                    claim.product_id,
+                    claim.text,
+                    claim.status,
+                    _dump(claim.metadata),
+                    claim.created_at.isoformat(),
+                    claim.updated_at.isoformat(),
                 ),
+            )
+            connection.execute("DELETE FROM claim_evidence WHERE claim_id = ?", (claim.id,))
+            connection.executemany(
+                "INSERT INTO claim_evidence(claim_id, source_id) VALUES (?, ?)",
+                [(claim.id, source_id) for source_id in claim.evidence_source_ids],
             )
             connection.commit()
         return claim
@@ -164,13 +259,32 @@ class BrandRepository:
             rows = connection.execute(
                 "SELECT * FROM claims WHERE brand_id = ? ORDER BY created_at, id", (brand_id,)
             ).fetchall()
-        return [ClaimRecord.model_validate({
-            "id": row["id"], "brand_id": row["brand_id"], "product_id": row["product_id"],
-            "text": row["text"], "status": row["status"],
-            "evidence_source_ids": _load(row["evidence_source_ids_json"]),
-            "metadata": _load(row["metadata_json"]), "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-        }) for row in rows]
+            evidence = {
+                str(row["id"]): [
+                    str(item["source_id"])
+                    for item in connection.execute(
+                        "SELECT source_id FROM claim_evidence WHERE claim_id = ? ORDER BY source_id",
+                        (row["id"],),
+                    ).fetchall()
+                ]
+                for row in rows
+            }
+        return [
+            ClaimRecord.model_validate(
+                {
+                    "id": row["id"],
+                    "brand_id": row["brand_id"],
+                    "product_id": row["product_id"],
+                    "text": row["text"],
+                    "status": row["status"],
+                    "evidence_source_ids": evidence[str(row["id"])],
+                    "metadata": _load(row["metadata_json"]),
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                }
+            )
+            for row in rows
+        ]
 
     def snapshot(self, slug_or_id: str) -> dict[str, object]:
         brand = self.get_brand(slug_or_id)
