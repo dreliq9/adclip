@@ -132,6 +132,7 @@ class Database:
                 )
                 """
             )
+            connection.commit()
             applied = {
                 int(row["version"])
                 for row in connection.execute("SELECT version FROM schema_migrations")
@@ -139,12 +140,16 @@ class Database:
             for version, sql in MIGRATIONS:
                 if version in applied:
                     continue
-                connection.executescript(sql)
-                connection.execute(
-                    "INSERT INTO schema_migrations(version) VALUES (?)",
-                    (version,),
-                )
-            connection.commit()
+                try:
+                    connection.executescript(
+                        "BEGIN IMMEDIATE;\n"
+                        + sql
+                        + f"\nINSERT INTO schema_migrations(version) VALUES ({version});\n"
+                        + "COMMIT;"
+                    )
+                except Exception:
+                    connection.rollback()
+                    raise
         return self.schema_version()
 
     def schema_version(self) -> int:
