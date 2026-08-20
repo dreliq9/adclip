@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import mimetypes
 import shutil
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +44,9 @@ class ArtifactStore:
         digest = sha256.lower()
         return self.root / digest[:2] / digest[2:4] / digest
 
+    def _temporary_path(self, target: Path) -> Path:
+        return target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
+
     def put_bytes(
         self,
         payload: bytes,
@@ -54,9 +58,12 @@ class ArtifactStore:
         target = self.path_for(digest)
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.exists():
-            temporary = target.with_name(f".{target.name}.tmp")
-            temporary.write_bytes(payload)
-            temporary.replace(target)
+            temporary = self._temporary_path(target)
+            try:
+                temporary.write_bytes(payload)
+                temporary.replace(target)
+            finally:
+                temporary.unlink(missing_ok=True)
         record = ArtifactRecord(
             sha256=digest,
             path=target,
@@ -86,9 +93,12 @@ class ArtifactStore:
         target = self.path_for(sha256)
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.exists():
-            temporary = target.with_name(f".{target.name}.tmp")
-            shutil.copyfile(path, temporary)
-            temporary.replace(target)
+            temporary = self._temporary_path(target)
+            try:
+                shutil.copyfile(path, temporary)
+                temporary.replace(target)
+            finally:
+                temporary.unlink(missing_ok=True)
         resolved_media_type = media_type or mimetypes.guess_type(path.name)[0]
         record = ArtifactRecord(
             sha256=sha256,
